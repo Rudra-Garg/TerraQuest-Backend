@@ -1,0 +1,20 @@
+[
+    {
+        "latitude": 40.75798,
+        "longitude": -73.9855,
+        "description": "Times Square, NYC, USA",
+        "source": "manual"
+    },
+    {
+        "latitude": 34.0522,
+        "longitude": -118.2437,
+        "description": "Los Angeles, CA, USA",
+        "source": "manual"
+    },
+    {
+        "latitude": -22.9068,
+        "longitude": -43.1729,
+        "description": "Rio de Janeiro, Brazil",
+        "source": "manual"
+    }
+]

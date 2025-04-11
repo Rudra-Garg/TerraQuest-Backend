@@ -3,61 +3,71 @@ package database
 import (
 	"fmt"
 	"log"
-	"os" // To read environment variables
-
+	"os"
+	"time"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger" // Optional: For more detailed GORM logging
+	"gorm.io/gorm/logger"
 
-    // Import models ONLY IF AutoMigrate is used here. Best practice is often
-    // to handle migrations separately, but for simplicity now:
-    "geoguessr-backend/internal/models" 
+	"geoguessr-backend/internal/models"
 
 )
 
-// DB is the global database connection pool instance
 var DB *gorm.DB
 
-// Connect initializes the database connection
 func Connect() error {
-	// Use environment variables for connection details (BEST PRACTICE)
-	// Provide defaults for local development ease
+
 	dbHost := os.Getenv("DB_HOST")
 	if dbHost == "" {
-		dbHost = "localhost" // Default if not set
+		dbHost = "localhost"
 	}
 	dbPort := os.Getenv("DB_PORT")
 	if dbPort == "" {
-		dbPort = "5432" // Default if not set
+		dbPort = "5432"
 	}
 	dbUser := os.Getenv("DB_USER")
 	if dbUser == "" {
-		dbUser = "postgres" // Default user
+		dbUser = "postgres"
 	}
 	dbPassword := os.Getenv("DB_PASSWORD")
 	if dbPassword == "" {
 		log.Println("WARNING: DB_PASSWORD environment variable not set.")
-		// Set a default ONLY for local dev if using Docker command above
-        // **REMOVE THIS IN PRODUCTION**
-        dbPassword = "mysecretpassword"
+
+		dbPassword = "mysecretpassword"
 	}
 	dbName := os.Getenv("DB_NAME")
 	if dbName == "" {
-		dbName = "geoguessr" // Default db name
+		dbName = "geoguessr"
 	}
 	dbSSLMode := os.Getenv("DB_SSLMODE")
 	if dbSSLMode == "" {
-		dbSSLMode = "disable" // Default for local dev
+		dbSSLMode = "disable"
 	}
 
-	// Construct the Data Source Name (DSN)
 	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=UTC",
 		dbHost, dbUser, dbPassword, dbName, dbPort, dbSSLMode)
 
+	
+	logLevel := logger.Warn // <<< Change from logger.Info to logger.Warn
+	if os.Getenv("GORM_LOG_LEVEL") == "info" {
+		logLevel = logger.Info // Allow overriding via env var if needed
+	}
+
+	newLogger := logger.New(
+		log.New(os.Stdout, "\r\n", log.LstdFlags), // io writer
+		logger.Config{
+			SlowThreshold:             time.Second * 2, // Slow SQL threshold (optional)
+			LogLevel:                  logLevel,         // Set the desired log level
+			IgnoreRecordNotFoundError: true,            // Don't log ErrRecordNotFound errors (usually expected)
+			ParameterizedQueries:      false,           // Don't include params in Info level logs (optional)
+			Colorful:                  true,            // Enable color (optional)
+		},
+	)
+	// ---------------------------
+
 	var err error
 	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info), // Log SQL queries
-        // Add other GORM config here if needed
+		Logger: newLogger, // <<< Use the configured logger
 	})
 
 	if err != nil {
@@ -65,23 +75,21 @@ func Connect() error {
 	}
 
 	log.Println("Database connection established successfully.")
-
-	// Auto Migration (Simple way to create tables, consider separate migration tools for production)
-    log.Println("Running auto migrations...")
+	log.Println("Running auto migrations...")
 	err = DB.AutoMigrate(
-		&models.Location{}, // Keep existing models
-		&models.User{},     // <<< Add the User model
+		&models.Location{},
+		&models.User{},
+		&models.Game{},
+		&models.Round{},
 	)
-    if err != nil {
-        return fmt.Errorf("failed to auto migrate database: %w", err)
-    }
-    log.Println("Auto migrations completed.")
-
+	if err != nil {
+		return fmt.Errorf("failed to auto migrate database: %w", err)
+	}
+	log.Println("Auto migrations completed.")
 
 	return nil
 }
 
-// GetDB returns the initialized DB instance
 func GetDB() *gorm.DB {
 	return DB
 }

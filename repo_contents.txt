@@ -1,0 +1,1272 @@
+
+Filename: .gitignore
+Content:
+.env
+.vscode
+repo_contents
+
+================================================================================
+
+Filename: cmd/server/main.go
+Content:
+package main
+
+import (
+	"log"
+	"net/http"
+
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
+
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+
+	"github.com/go-openapi/runtime/middleware"
+
+	_ "geoguessr-backend/docs" // for swagger docs
+	"geoguessr-backend/internal/database"
+	"geoguessr-backend/internal/handlers"
+	"geoguessr-backend/internal/utils"
+)
+
+// @title           TerraQuest Backend API
+// @version         1.0
+// @description     API Server for the TerraQuest GeoGuessr clone game.
+// @termsOfService  http://swagger.io/terms/  <-- Update later
+
+// @contact.name   API Support
+// @contact.url    http://www.example.com/support <-- Update later
+// @contact.email  support@example.com <-- Update later
+
+// @license.name  Apache 2.0  <-- Or your chosen license
+// @license.url   http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host      localhost:8080
+// @BasePath  /api/v1
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
+
+func main() {
+	log.Println("Starting GeoGuessr Backend Server...")
+
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("No .env file found, using system environment variables.")
+	}
+
+	utils.InitializeJWT()
+
+	err = database.Connect()
+	if err != nil {
+		log.Fatalf("Could not connect to the database: %v", err)
+	}
+
+	router := gin.Default()
+
+	config := cors.DefaultConfig()
+
+	config.AllowOrigins = []string{"http://localhost:5173"}
+	config.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
+	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
+
+	router.Use(cors.New(config))
+
+	router.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	log.Println("Swagger UI available at http://localhost:8080/docs/index.html")
+
+	opts := middleware.RedocOpts{
+		SpecURL: "/docs/doc.json",
+		Path:    "/redoc",
+		Title:   "TerraQuest API Docs (ReDoc)",
+	}
+	redocHandler := middleware.Redoc(opts, nil)
+	router.GET("/redoc", gin.WrapH(redocHandler))
+	log.Println("ReDoc UI available at http://localhost:8080/redoc")
+
+	api := router.Group("/api/v1")
+	{
+		authGroup := api.Group("/auth")
+		{
+			authGroup.POST("/register", handlers.Register)
+			authGroup.POST("/login", handlers.Login)
+		}
+		gameGroup := api.Group("/game")
+		{
+
+			gameGroup.GET("/start", handlers.StartGame)
+
+		}
+
+	}
+
+	router.GET("/ping", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "pong"})
+	})
+
+	port := ":8080"
+	log.Printf("Server listening on port %s\n", port)
+	err = router.Run(port)
+	if err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
+}
+
+
+================================================================================
+
+Filename: go.mod
+Content:
+module geoguessr-backend
+
+go 1.23.4
+
+require (
+	github.com/KyleBanks/depth v1.2.1 // indirect
+	github.com/PuerkitoBio/purell v1.2.1 // indirect
+	github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 // indirect
+	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
+	github.com/bytedance/sonic v1.13.2 // indirect
+	github.com/bytedance/sonic/loader v0.2.4 // indirect
+	github.com/cloudwego/base64x v0.1.5 // indirect
+	github.com/cloudwego/iasm v0.2.0 // indirect
+	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
+	github.com/gabriel-vasile/mimetype v1.4.8 // indirect
+	github.com/gin-contrib/cors v1.7.5 // indirect
+	github.com/gin-contrib/sse v1.1.0 // indirect
+	github.com/gin-gonic/gin v1.10.0 // indirect
+	github.com/go-openapi/analysis v0.23.0 // indirect
+	github.com/go-openapi/errors v0.22.0 // indirect
+	github.com/go-openapi/jsonpointer v0.21.1 // indirect
+	github.com/go-openapi/jsonreference v0.21.0 // indirect
+	github.com/go-openapi/loads v0.22.0 // indirect
+	github.com/go-openapi/runtime v0.28.0 // indirect
+	github.com/go-openapi/spec v0.21.0 // indirect
+	github.com/go-openapi/strfmt v0.23.0 // indirect
+	github.com/go-openapi/swag v0.23.1 // indirect
+	github.com/go-openapi/validate v0.24.0 // indirect
+	github.com/go-playground/locales v0.14.1 // indirect
+	github.com/go-playground/universal-translator v0.18.1 // indirect
+	github.com/go-playground/validator/v10 v10.26.0 // indirect
+	github.com/goccy/go-json v0.10.5 // indirect
+	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
+	github.com/google/uuid v1.6.0 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/pgx/v5 v5.7.4 // indirect
+	github.com/jackc/puddle/v2 v2.2.2 // indirect
+	github.com/jinzhu/inflection v1.0.0 // indirect
+	github.com/jinzhu/now v1.1.5 // indirect
+	github.com/joho/godotenv v1.5.1 // indirect
+	github.com/josharian/intern v1.0.0 // indirect
+	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
+	github.com/leodido/go-urn v1.4.0 // indirect
+	github.com/mailru/easyjson v0.9.0 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mitchellh/mapstructure v1.5.0 // indirect
+	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
+	github.com/modern-go/reflect2 v1.0.2 // indirect
+	github.com/oklog/ulid v1.3.1 // indirect
+	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
+	github.com/russross/blackfriday/v2 v2.1.0 // indirect
+	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
+	github.com/swaggo/files v1.0.1 // indirect
+	github.com/swaggo/gin-swagger v1.6.0 // indirect
+	github.com/swaggo/swag v1.16.4 // indirect
+	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
+	github.com/ugorji/go/codec v1.2.12 // indirect
+	github.com/urfave/cli/v2 v2.27.6 // indirect
+	github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1 // indirect
+	go.mongodb.org/mongo-driver v1.14.0 // indirect
+	golang.org/x/arch v0.16.0 // indirect
+	golang.org/x/crypto v0.37.0 // indirect
+	golang.org/x/net v0.39.0 // indirect
+	golang.org/x/sync v0.13.0 // indirect
+	golang.org/x/sys v0.32.0 // indirect
+	golang.org/x/text v0.24.0 // indirect
+	golang.org/x/tools v0.32.0 // indirect
+	google.golang.org/protobuf v1.36.6 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gorm.io/driver/postgres v1.5.11 // indirect
+	gorm.io/gorm v1.25.12 // indirect
+	sigs.k8s.io/yaml v1.4.0 // indirect
+)
+
+
+================================================================================
+
+Filename: go.sum
+Content:
+github.com/KyleBanks/depth v1.2.1 h1:5h8fQADFrWtarTdtDudMmGsC7GPbOAu6RVB3ffsVFHc=
+github.com/KyleBanks/depth v1.2.1/go.mod h1:jzSb9d0L43HxTQfT+oSA1EEp2q+ne2uh6XgeJcm8brE=
+github.com/PuerkitoBio/purell v1.2.1 h1:QsZ4TjvwiMpat6gBCBxEQI0rcS9ehtkKtSpiUnd9N28=
+github.com/PuerkitoBio/purell v1.2.1/go.mod h1:ZwHcC/82TOaovDi//J/804umJFFmbOHPngi8iYYv/Eo=
+github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 h1:d+Bc7a5rLufV/sSk/8dngufqelfh6jnri85riMAaF/M=
+github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578/go.mod h1:uGdkoq3SwY9Y+13GIhn11/XLaGBb4BfwItxLd5jeuXE=
+github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 h1:DklsrG3dyBCFEj5IhUbnKptjxatkF07cF2ak3yi77so=
+github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2/go.mod h1:WaHUgvxTVq04UNunO+XhnAqY/wQc+bxr74GqbsZ/Jqw=
+github.com/bytedance/sonic v1.13.2 h1:8/H1FempDZqC4VqjptGo14QQlJx8VdZJegxs6wwfqpQ=
+github.com/bytedance/sonic v1.13.2/go.mod h1:o68xyaF9u2gvVBuGHPlUVCy+ZfmNNO5ETf1+KgkJhz4=
+github.com/bytedance/sonic/loader v0.1.1/go.mod h1:ncP89zfokxS5LZrJxl5z0UJcsk4M4yY2JpfqGeCtNLU=
+github.com/bytedance/sonic/loader v0.2.4 h1:ZWCw4stuXUsn1/+zQDqeE7JKP+QO47tz7QCNan80NzY=
+github.com/bytedance/sonic/loader v0.2.4/go.mod h1:N8A3vUdtUebEY2/VQC0MyhYeKUFosQU6FxH2JmUe6VI=
+github.com/cloudwego/base64x v0.1.5 h1:XPciSp1xaq2VCSt6lF0phncD4koWyULpl5bUxbfCyP4=
+github.com/cloudwego/base64x v0.1.5/go.mod h1:0zlkT4Wn5C6NdauXdJRhSKRlJvmclQ1hhJgA0rcu/8w=
+github.com/cloudwego/iasm v0.2.0 h1:1KNIy1I1H9hNNFEEH3DVnI4UujN+1zjpuk6gwHLTssg=
+github.com/cloudwego/iasm v0.2.0/go.mod h1:8rXZaNYT2n95jn+zTI1sDr+IgcD2GVs0nlbbQPiEFhY=
+github.com/cpuguy83/go-md2man/v2 v2.0.6 h1:XJtiaUW6dEEqVuZiMTn1ldk455QWwEIsMIJlo5vtkx0=
+github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=
+github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/gabriel-vasile/mimetype v1.4.8 h1:FfZ3gj38NjllZIeJAmMhr+qKL8Wu+nOoI3GqacKw1NM=
+github.com/gabriel-vasile/mimetype v1.4.8/go.mod h1:ByKUIKGjh1ODkGM1asKUbQZOLGrPjydw3hYPU2YU9t8=
+github.com/gin-contrib/cors v1.7.5 h1:cXC9SmofOrRg0w9PigwGlHG3ztswH6bqq4vJVXnvYMk=
+github.com/gin-contrib/cors v1.7.5/go.mod h1:4q3yi7xBEDDWKapjT2o1V7mScKDDr8k+jZ0fSquGoy0=
+github.com/gin-contrib/sse v1.1.0 h1:n0w2GMuUpWDVp7qSpvze6fAu9iRxJY4Hmj6AmBOU05w=
+github.com/gin-contrib/sse v1.1.0/go.mod h1:hxRZ5gVpWMT7Z0B0gSNYqqsSCNIJMjzvm6fqCz9vjwM=
+github.com/gin-gonic/gin v1.10.0 h1:nTuyha1TYqgedzytsKYqna+DfLos46nTv2ygFy86HFU=
+github.com/gin-gonic/gin v1.10.0/go.mod h1:4PMNQiOhvDRa013RKVbsiNwoyezlm2rm0uX/T7kzp5Y=
+github.com/go-openapi/analysis v0.23.0 h1:aGday7OWupfMs+LbmLZG4k0MYXIANxcuBTYUC03zFCU=
+github.com/go-openapi/analysis v0.23.0/go.mod h1:9mz9ZWaSlV8TvjQHLl2mUW2PbZtemkE8yA5v22ohupo=
+github.com/go-openapi/errors v0.22.0 h1:c4xY/OLxUBSTiepAg3j/MHuAv5mJhnf53LLMWFB+u/w=
+github.com/go-openapi/errors v0.22.0/go.mod h1:J3DmZScxCDufmIMsdOuDHxJbdOGC0xtUynjIx092vXE=
+github.com/go-openapi/jsonpointer v0.21.1 h1:whnzv/pNXtK2FbX/W9yJfRmE2gsmkfahjMKB0fZvcic=
+github.com/go-openapi/jsonpointer v0.21.1/go.mod h1:50I1STOfbY1ycR8jGz8DaMeLCdXiI6aDteEdRNNzpdk=
+github.com/go-openapi/jsonreference v0.21.0 h1:Rs+Y7hSXT83Jacb7kFyjn4ijOuVGSvOdF2+tg1TRrwQ=
+github.com/go-openapi/jsonreference v0.21.0/go.mod h1:LmZmgsrTkVg9LG4EaHeY8cBDslNPMo06cago5JNLkm4=
+github.com/go-openapi/loads v0.22.0 h1:ECPGd4jX1U6NApCGG1We+uEozOAvXvJSF4nnwHZ8Aco=
+github.com/go-openapi/loads v0.22.0/go.mod h1:yLsaTCS92mnSAZX5WWoxszLj0u+Ojl+Zs5Stn1oF+rs=
+github.com/go-openapi/runtime v0.28.0 h1:gpPPmWSNGo214l6n8hzdXYhPuJcGtziTOgUpvsFWGIQ=
+github.com/go-openapi/runtime v0.28.0/go.mod h1:QN7OzcS+XuYmkQLw05akXk0jRH/eZ3kb18+1KwW9gyc=
+github.com/go-openapi/spec v0.21.0 h1:LTVzPc3p/RzRnkQqLRndbAzjY0d0BCL72A6j3CdL9ZY=
+github.com/go-openapi/spec v0.21.0/go.mod h1:78u6VdPw81XU44qEWGhtr982gJ5BWg2c0I5XwVMotYk=
+github.com/go-openapi/strfmt v0.23.0 h1:nlUS6BCqcnAk0pyhi9Y+kdDVZdZMHfEKQiS4HaMgO/c=
+github.com/go-openapi/strfmt v0.23.0/go.mod h1:NrtIpfKtWIygRkKVsxh7XQMDQW5HKQl6S5ik2elW+K4=
+github.com/go-openapi/swag v0.23.1 h1:lpsStH0n2ittzTnbaSloVZLuB5+fvSY/+hnagBjSNZU=
+github.com/go-openapi/swag v0.23.1/go.mod h1:STZs8TbRvEQQKUA+JZNAm3EWlgaOBGpyFDqQnDHMef0=
+github.com/go-openapi/validate v0.24.0 h1:LdfDKwNbpB6Vn40xhTdNZAnfLECL81w+VX3BumrGD58=
+github.com/go-openapi/validate v0.24.0/go.mod h1:iyeX1sEufmv3nPbBdX3ieNviWnOZaJ1+zquzJEf2BAQ=
+github.com/go-playground/locales v0.14.1 h1:EWaQ/wswjilfKLTECiXz7Rh+3BjFhfDFKv/oXslEjJA=
+github.com/go-playground/locales v0.14.1/go.mod h1:hxrqLVvrK65+Rwrd5Fc6F2O76J/NuW9t0sjnWqG1slY=
+github.com/go-playground/universal-translator v0.18.1 h1:Bcnm0ZwsGyWbCzImXv+pAJnYK9S473LQFuzCbDbfSFY=
+github.com/go-playground/universal-translator v0.18.1/go.mod h1:xekY+UJKNuX9WP91TpwSH2VMlDf28Uj24BCp08ZFTUY=
+github.com/go-playground/validator/v10 v10.26.0 h1:SP05Nqhjcvz81uJaRfEV0YBSSSGMc/iMaVtFbr3Sw2k=
+github.com/go-playground/validator/v10 v10.26.0/go.mod h1:I5QpIEbmr8On7W0TktmJAumgzX4CA1XNl4ZmDuVHKKo=
+github.com/goccy/go-json v0.10.5 h1:Fq85nIqj+gXn/S5ahsiTlK3TmC85qgirsdTP/+DeaC4=
+github.com/goccy/go-json v0.10.5/go.mod h1:oq7eo15ShAhp70Anwd5lgX2pLfOS3QCiwU/PULtXL6M=
+github.com/golang-jwt/jwt/v5 v5.2.2 h1:Rl4B7itRWVtYIHFrSNd7vhTiz9UpLdi6gZhZ3wEeDy8=
+github.com/golang-jwt/jwt/v5 v5.2.2/go.mod h1:pqrtFR0X4osieyHYxtmOUWsAWrfe1Q5UVIyoH402zdk=
+github.com/google/go-cmp v0.5.9/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
+github.com/google/gofuzz v1.0.0/go.mod h1:dBl0BpW6vV/+mYPU4Po3pmUjxk6FQPldtuIdl/M65Eg=
+github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
+github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
+github.com/jackc/pgpassfile v1.0.0 h1:/6Hmqy13Ss2zCq62VdNG8tM1wchn8zjSGOBJ6icpsIM=
+github.com/jackc/pgpassfile v1.0.0/go.mod h1:CEx0iS5ambNFdcRtxPj5JhEz+xB6uRky5eyVu/W2HEg=
+github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 h1:iCEnooe7UlwOQYpKFhBabPMi4aNAfoODPEFNiAnClxo=
+github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761/go.mod h1:5TJZWKEWniPve33vlWYSoGYefn3gLQRzjfDlhSJ9ZKM=
+github.com/jackc/pgx/v5 v5.7.4 h1:9wKznZrhWa2QiHL+NjTSPP6yjl3451BX3imWDnokYlg=
+github.com/jackc/pgx/v5 v5.7.4/go.mod h1:ncY89UGWxg82EykZUwSpUKEfccBGGYq1xjrOpsbsfGQ=
+github.com/jackc/puddle/v2 v2.2.2 h1:PR8nw+E/1w0GLuRFSmiioY6UooMp6KJv0/61nB7icHo=
+github.com/jackc/puddle/v2 v2.2.2/go.mod h1:vriiEXHvEE654aYKXXjOvZM39qJ0q+azkZFrfEOc3H4=
+github.com/jinzhu/inflection v1.0.0 h1:K317FqzuhWc8YvSVlFMCCUb36O/S9MCKRDI7QkRKD/E=
+github.com/jinzhu/inflection v1.0.0/go.mod h1:h+uFLlag+Qp1Va5pdKtLDYj+kHp5pxUVkryuEj+Srlc=
+github.com/jinzhu/now v1.1.5 h1:/o9tlHleP7gOFmsnYNz3RGnqzefHA47wQpKrrdTIwXQ=
+github.com/jinzhu/now v1.1.5/go.mod h1:d3SSVoowX0Lcu0IBviAWJpolVfI5UJVZZ7cO71lE/z8=
+github.com/joho/godotenv v1.5.1 h1:7eLL/+HRGLY0ldzfGMeQkb7vMd0as4CfYvUVzLqw0N0=
+github.com/joho/godotenv v1.5.1/go.mod h1:f4LDr5Voq0i2e/R5DDNOoa2zzDfwtkZa6DnEwAbqwq4=
+github.com/josharian/intern v1.0.0 h1:vlS4z54oSdjm0bgjRigI+G1HpF+tI+9rE5LLzOg8HmY=
+github.com/josharian/intern v1.0.0/go.mod h1:5DoeVV0s6jJacbCEi61lwdGj/aVlrQvzHFFd8Hwg//Y=
+github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnrnM=
+github.com/json-iterator/go v1.1.12/go.mod h1:e30LSqwooZae/UwlEbR2852Gd8hjQvJoHmT4TnhNGBo=
+github.com/klauspost/cpuid/v2 v2.0.9/go.mod h1:FInQzS24/EEf25PyTYn52gqo7WaD8xa0213Md/qVLRg=
+github.com/klauspost/cpuid/v2 v2.2.10 h1:tBs3QSyvjDyFTq3uoc/9xFpCuOsJQFNPiAhYdw2skhE=
+github.com/klauspost/cpuid/v2 v2.2.10/go.mod h1:hqwkgyIinND0mEev00jJYCxPNVRVXFQeu1XKlok6oO0=
+github.com/knz/go-libedit v1.10.1/go.mod h1:MZTVkCWyz0oBc7JOWP3wNAzd002ZbM/5hgShxwh4x8M=
+github.com/kr/text v0.2.0/go.mod h1:eLer722TekiGuMkidMxC/pM04lWEeraHUUmBw8l2grE=
+github.com/leodido/go-urn v1.4.0 h1:WT9HwE9SGECu3lg4d/dIA+jxlljEa1/ffXKmRjqdmIQ=
+github.com/leodido/go-urn v1.4.0/go.mod h1:bvxc+MVxLKB4z00jd1z+Dvzr47oO32F/QSNjSBOlFxI=
+github.com/mailru/easyjson v0.9.0 h1:PrnmzHw7262yW8sTBwxi1PdJA3Iw/EKBa8psRf7d9a4=
+github.com/mailru/easyjson v0.9.0/go.mod h1:1+xMtQp2MRNVL/V1bOzuP3aP8VNwRW55fQUto+XFtTU=
+github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWEY=
+github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
+github.com/mitchellh/mapstructure v1.5.0 h1:jeMsZIYE/09sWLaz43PL7Gy6RuMjD2eJVyuac5Z2hdY=
+github.com/mitchellh/mapstructure v1.5.0/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
+github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
+github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd h1:TRLaZ9cD/w8PVh93nsPXa1VrQ6jlwL5oN8l14QlcNfg=
+github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
+github.com/modern-go/reflect2 v1.0.2 h1:xBagoLtFs94CBntxluKeaWgTMpvLxC4ur3nMaC9Gz0M=
+github.com/modern-go/reflect2 v1.0.2/go.mod h1:yWuevngMOJpCy52FWWMvUC8ws7m/LJsjYzDa0/r8luk=
+github.com/oklog/ulid v1.3.1 h1:EGfNDEx6MqHz8B3uNV6QAib1UR2Lm97sHi3ocA6ESJ4=
+github.com/oklog/ulid v1.3.1/go.mod h1:CirwcVhetQ6Lv90oh/F+FBtV6XMibvdAFo93nm5qn4U=
+github.com/pelletier/go-toml/v2 v2.2.4 h1:mye9XuhQ6gvn5h28+VilKrrPoQVanw5PMw/TB0t5Ec4=
+github.com/pelletier/go-toml/v2 v2.2.4/go.mod h1:2gIqNv+qfxSVS7cM2xJQKtLSTLUE9V8t9Stt+h56mCY=
+github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
+github.com/russross/blackfriday/v2 v2.1.0 h1:JIOH55/0cWyOuilr9/qlrm0BSXldqnqwMsf35Ld67mk=
+github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
+github.com/shurcooL/sanitized_anchor_name v1.0.0 h1:PdmoCO6wvbs+7yrJyMORt4/BmY5IYyJwS/kOiWx8mHo=
+github.com/shurcooL/sanitized_anchor_name v1.0.0/go.mod h1:1NzhyTcUVG4SuEtjjoZeVRXNmyL/1OwPU0+IJeTBvfc=
+github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
+github.com/stretchr/objx v0.4.0/go.mod h1:YvHI0jy2hoMjB+UWwv71VJQ9isScKT/TqJzVSSt89Yw=
+github.com/stretchr/objx v0.5.0/go.mod h1:Yh+to48EsGEfYuaHDzXPcE3xhTkx73EhmCGUpEOglKo=
+github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
+github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
+github.com/stretchr/testify v1.7.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
+github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO+kdMU+MU=
+github.com/stretchr/testify v1.8.1/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
+github.com/swaggo/files v1.0.1 h1:J1bVJ4XHZNq0I46UU90611i9/YzdrF7x92oX1ig5IdE=
+github.com/swaggo/files v1.0.1/go.mod h1:0qXmMNH6sXNf+73t65aKeB+ApmgxdnkQzVTAj2uaMUg=
+github.com/swaggo/gin-swagger v1.6.0 h1:y8sxvQ3E20/RCyrXeFfg60r6H0Z+SwpTjMYsMm+zy8M=
+github.com/swaggo/gin-swagger v1.6.0/go.mod h1:BG00cCEy294xtVpyIAHG6+e2Qzj/xKlRdOqDkvq0uzo=
+github.com/swaggo/swag v1.16.4 h1:clWJtd9LStiG3VeijiCfOVODP6VpHtKdQy9ELFG3s1A=
+github.com/swaggo/swag v1.16.4/go.mod h1:VBsHJRsDvfYvqoiMKnsdwhNV9LEMHgEDZcyVYX0sxPg=
+github.com/twitchyliquid64/golang-asm v0.15.1 h1:SU5vSMR7hnwNxj24w34ZyCi/FmDZTkS4MhqMhdFk5YI=
+github.com/twitchyliquid64/golang-asm v0.15.1/go.mod h1:a1lVb/DtPvCB8fslRZhAngC2+aY1QWCk3Cedj/Gdt08=
+github.com/ugorji/go/codec v1.2.12 h1:9LC83zGrHhuUA9l16C9AHXAqEV/2wBQ4nkvumAE65EE=
+github.com/ugorji/go/codec v1.2.12/go.mod h1:UNopzCgEMSXjBc6AOMqYvWC1ktqTAfzJZUZgYf6w6lg=
+github.com/urfave/cli/v2 v2.27.6 h1:VdRdS98FNhKZ8/Az8B7MTyGQmpIr36O1EHybx/LaZ4g=
+github.com/urfave/cli/v2 v2.27.6/go.mod h1:3Sevf16NykTbInEnD0yKkjDAeZDS0A6bzhBH5hrMvTQ=
+github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1 h1:gEOO8jv9F4OT7lGCjxCBTO/36wtF6j2nSip77qHd4x4=
+github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1/go.mod h1:Ohn+xnUBiLI6FVj/9LpzZWtj1/D6lUovWYBkxHVV3aM=
+github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
+go.mongodb.org/mongo-driver v1.14.0 h1:P98w8egYRjYe3XDjxhYJagTokP/H6HzlsnojRgZRd80=
+go.mongodb.org/mongo-driver v1.14.0/go.mod h1:Vzb0Mk/pa7e6cWw85R4F/endUC3u0U9jGcNU603k65c=
+golang.org/x/arch v0.16.0 h1:foMtLTdyOmIniqWCHjY6+JxuC54XP1fDwx4N0ASyW+U=
+golang.org/x/arch v0.16.0/go.mod h1:JmwW7aLIoRUKgaTzhkiEFxvcEiQGyOg9BMonBJUS7EE=
+golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
+golang.org/x/crypto v0.0.0-20210921155107-089bfa567519/go.mod h1:GvvjBRRGRdwPK5ydBHafDWAxML/pGHZbMvKqRZ5+Abc=
+golang.org/x/crypto v0.37.0 h1:kJNSjF/Xp7kU0iB2Z+9viTPMW4EqqsrywMXLJOOsXSE=
+golang.org/x/crypto v0.37.0/go.mod h1:vg+k43peMZ0pUMhYmVAWysMK35e6ioLh3wB8ZCAfbVc=
+golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4/go.mod h1:jJ57K6gSWd91VN4djpZkiMVwK6gcyfeH4XE8wZrZaV4=
+golang.org/x/net v0.0.0-20190620200207-3b0461eec859/go.mod h1:z5CRVTTTmAJ677TzLLGU+0bjPO0LkuOLi4/5GtJWs/s=
+golang.org/x/net v0.0.0-20210226172049-e18ecbb05110/go.mod h1:m0MpNAwzfU5UDzcl9v0D8zg8gWTRqZa9RBIspLL5mdg=
+golang.org/x/net v0.0.0-20220722155237-a158d28d115b/go.mod h1:XRhObCWvk6IyKnWLug+ECip1KBveYUHfp+8e9klMJ9c=
+golang.org/x/net v0.7.0/go.mod h1:2Tu9+aMcznHK/AK1HMvgo6xiTLG5rD5rZLDS+rp2Bjs=
+golang.org/x/net v0.39.0 h1:ZCu7HMWDxpXpaiKdhzIfaltL9Lp31x/3fCP11bc6/fY=
+golang.org/x/net v0.39.0/go.mod h1:X7NRbYVEA+ewNkCNyJ513WmMdQ3BineSwVtN2zD/d+E=
+golang.org/x/sync v0.0.0-20190423024810-112230192c58/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
+golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
+golang.org/x/sync v0.13.0 h1:AauUjRAJ9OSnvULf/ARrrVywoJDy0YS2AwQ98I37610=
+golang.org/x/sync v0.13.0/go.mod h1:1dzgHSNfp02xaA81J2MS99Qcpr2w7fw1gpm99rleRqA=
+golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
+golang.org/x/sys v0.0.0-20201119102817-f84b799fce68/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
+golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.5.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.6.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.32.0 h1:s77OFDvIQeibCmezSnk/q6iAfkdiQaJi4VzroCFrN20=
+golang.org/x/sys v0.32.0/go.mod h1:BJP2sWEmIv4KK5OTEluFJCKSidICx8ciO85XgH3Ak8k=
+golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1/go.mod h1:bj7SfCRtBDWHUb9snDiAeCFNEtKQo2Wmx5Cou7ajbmo=
+golang.org/x/term v0.0.0-20210927222741-03fcf44c2211/go.mod h1:jbD1KX2456YbFQfuXm/mYQcufACuNUgVhRMnK/tPxf8=
+golang.org/x/term v0.5.0/go.mod h1:jMB1sMXY+tzblOD4FWmEbocvup2/aLOaQEp7JmGp78k=
+golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
+golang.org/x/text v0.3.3/go.mod h1:5Zoc/QRtKVWzQhOtBMvqHzDpF6irO9z98xDceosuGiQ=
+golang.org/x/text v0.3.7/go.mod h1:u+2+/6zg+i71rQMx5EYifcz6MCKuco9NR6JIITiCfzQ=
+golang.org/x/text v0.7.0/go.mod h1:mrYo+phRRbMaCq/xk9113O4dZlRixOauAjOtrjsXDZ8=
+golang.org/x/text v0.24.0 h1:dd5Bzh4yt5KYA8f9CJHCP4FB4D51c2c6JvN37xJJkJ0=
+golang.org/x/text v0.24.0/go.mod h1:L8rBsPeo2pSS+xqN0d5u2ikmjtmoJbDBT1b7nHvFCdU=
+golang.org/x/tools v0.0.0-20180917221912-90fa682c2a6e/go.mod h1:n7NCudcB/nEzxVGmLbDWY5pfWTLqBcC2KZ6jyYvM4mQ=
+golang.org/x/tools v0.0.0-20191119224855-298f0cb1881e/go.mod h1:b+2E5dAYhXwXZwtnZ6UAqBI28+e2cm9otk0dWdXHAEo=
+golang.org/x/tools v0.1.12/go.mod h1:hNGJHUnrk76NpqgfD5Aqm5Crs+Hm0VOH/i9J2+nxYbc=
+golang.org/x/tools v0.32.0 h1:Q7N1vhpkQv7ybVzLFtTjvQya2ewbwNDZzUgfXGqtMWU=
+golang.org/x/tools v0.32.0/go.mod h1:ZxrU41P/wAbZD8EDa6dDCa6XfpkhJ7HFMjHJXfBDu8s=
+golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
+google.golang.org/protobuf v1.36.6 h1:z1NpPI8ku2WgiWnf+t9wTPsn6eP1L7ksHUlkfLvd9xY=
+google.golang.org/protobuf v1.36.6/go.mod h1:jduwjTPXsFjZGTmRluh+L6NjiWu7pchiJ2/5YcXBHnY=
+gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
+gopkg.in/yaml.v2 v2.4.0 h1:D8xgwECY7CYvx+Y2n4sBz93Jn9JRvxdiyyo8CTfuKaY=
+gopkg.in/yaml.v2 v2.4.0/go.mod h1:RDklbk79AGWmwhnvt/jBztapEOGDOx6ZbXqjP6csGnQ=
+gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
+gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
+gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
+gorm.io/driver/postgres v1.5.11 h1:ubBVAfbKEUld/twyKZ0IYn9rSQh448EdelLYk9Mv314=
+gorm.io/driver/postgres v1.5.11/go.mod h1:DX3GReXH+3FPWGrrgffdvCk3DQ1dwDPdmbenSkweRGI=
+gorm.io/gorm v1.25.12 h1:I0u8i2hWQItBq1WfE0o2+WuL9+8L21K9e2HHSTE/0f8=
+gorm.io/gorm v1.25.12/go.mod h1:xh7N7RHfYlNc5EmcI/El95gXusucDrQnHXe0+CgWcLQ=
+nullprogram.com/x/optparse v1.0.0/go.mod h1:KdyPE+Igbe0jQUrVfMqDMeJQIJZEuyV7pjYmp6pbG50=
+rsc.io/pdf v0.1.1/go.mod h1:n8OzWcQ6Sp37PL01nO98y4iUCRdTGarVfzxY20ICaU4=
+sigs.k8s.io/yaml v1.4.0 h1:Mk1wCc2gy/F0THH0TAp1QYyJNzRm2KCLy3o5ASXVI5E=
+sigs.k8s.io/yaml v1.4.0/go.mod h1:Ejl7/uTz7PSA4eKMyQCUTnhZYNmLIl+5c2lQPGR2BPY=
+
+
+================================================================================
+
+Filename: internal/database/database.go
+Content:
+package database
+
+import (
+	"fmt"
+	"log"
+	"os"
+
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+
+	"geoguessr-backend/internal/models"
+)
+
+var DB *gorm.DB
+
+func Connect() error {
+
+	dbHost := os.Getenv("DB_HOST")
+	if dbHost == "" {
+		dbHost = "localhost"
+	}
+	dbPort := os.Getenv("DB_PORT")
+	if dbPort == "" {
+		dbPort = "5432"
+	}
+	dbUser := os.Getenv("DB_USER")
+	if dbUser == "" {
+		dbUser = "postgres"
+	}
+	dbPassword := os.Getenv("DB_PASSWORD")
+	if dbPassword == "" {
+		log.Println("WARNING: DB_PASSWORD environment variable not set.")
+
+		dbPassword = "mysecretpassword"
+	}
+	dbName := os.Getenv("DB_NAME")
+	if dbName == "" {
+		dbName = "geoguessr"
+	}
+	dbSSLMode := os.Getenv("DB_SSLMODE")
+	if dbSSLMode == "" {
+		dbSSLMode = "disable"
+	}
+
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=UTC",
+		dbHost, dbUser, dbPassword, dbName, dbPort, dbSSLMode)
+
+	var err error
+	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Info),
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to connect to database: %w", err)
+	}
+
+	log.Println("Database connection established successfully.")
+
+	log.Println("Running auto migrations...")
+	err = DB.AutoMigrate(
+		&models.Location{},
+		&models.User{},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to auto migrate database: %w", err)
+	}
+	log.Println("Auto migrations completed.")
+
+	return nil
+}
+
+func GetDB() *gorm.DB {
+	return DB
+}
+
+
+================================================================================
+
+Filename: internal/handlers/game_handler.go
+Content:
+package handlers
+
+import (
+	"log"
+	"net/http"
+	"strconv" 
+	"time"
+
+	"github.com/gin-gonic/gin"
+	
+	"geoguessr-backend/internal/database" 
+	"geoguessr-backend/internal/models"   
+)
+
+const defaultRounds = 5
+
+
+type GameLocationResponse struct {
+	ID        uint    `json:"id"`
+	Latitude  float64 `json:"lat"`
+	Longitude float64 `json:"lng"`
+	
+}
+
+// StartGame godoc
+// @Summary      Start a new game
+// @Description  Fetches a specified number of random locations for a new game session.
+// @Tags         Game
+// @Produce      json
+// @Param        rounds query int false "Number of rounds (default: 5)" mininum(1) maximum(10)
+// @Success      200 {object} map[string]interface{} "Game started successfully (returns gameId placeholder and locations)"
+// @Failure      500 {object} map[string]string "Internal server error (failed to fetch locations)"
+// @Router       /game/start [get]
+func StartGame(c *gin.Context) {
+	log.Println("Handler: StartGame invoked")
+
+	
+	roundsStr := c.DefaultQuery("rounds", strconv.Itoa(defaultRounds))
+	rounds, err := strconv.Atoi(roundsStr)
+	if err != nil || rounds <= 0 {
+		rounds = defaultRounds
+	}
+	log.Printf("Handler: Requesting %d rounds", rounds)
+
+	db := database.GetDB() 
+
+	var locations []models.Location
+	var responseLocations []GameLocationResponse
+
+	
+	
+	
+	
+	result := db.Model(&models.Location{}).
+		Order("RANDOM()"). 
+		Limit(rounds).
+		Find(&locations) 
+
+	if result.Error != nil {
+		log.Printf("Error fetching locations: %v", result.Error)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch game locations"})
+		return
+	}
+
+	if len(locations) < rounds {
+		
+		log.Printf("Warning: Found only %d locations, requested %d", len(locations), rounds)
+		
+		
+		if len(locations) == 0 {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No locations found in database"})
+			return
+		}
+	}
+
+	
+	for _, loc := range locations {
+		responseLocations = append(responseLocations, GameLocationResponse{
+			ID:        loc.ID, 
+			Latitude:  loc.Latitude,
+			Longitude: loc.Longitude,
+		})
+	}
+
+	log.Printf("Handler: Successfully fetched %d locations", len(responseLocations))
+	c.JSON(http.StatusOK, gin.H{
+		"gameId":    "mock_backend_game_" + strconv.Itoa(int(time.Now().Unix())), 
+		"locations": responseLocations,
+	})
+}
+
+
+================================================================================
+
+Filename: internal/models/location.go
+Content:
+package models
+
+import "gorm.io/gorm"
+
+
+type Location struct {
+	gorm.Model        
+	Latitude   float64 `gorm:"not null"`
+	Longitude  float64 `gorm:"not null"`
+	Description string  
+	Country    string  
+	Region     string  
+	
+}
+
+
+
+
+
+
+================================================================================
+
+Filename: internal/models/user.go
+Content:
+package models
+
+import (
+	"time" 
+
+	"gorm.io/gorm"
+)
+
+
+type User struct {
+	ID        uint   `gorm:"primaryKey"`
+	Username  string `gorm:"size:50;not null;uniqueIndex" validate:"required,min=3,max=50"` 
+	Email     string `gorm:"size:100;not null;uniqueIndex" validate:"required,email"`        
+	PasswordHash string `gorm:"not null" validate:"required"`                             
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt `gorm:"index"` 
+
+	
+	
+	
+}
+
+
+
+
+type RegisterInput struct {
+	Username string `json:"username" validate:"required,min=3,max=50"`
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required,min=6,max=72"` 
+}
+
+
+type LoginInput struct {
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required"`
+}
+
+================================================================================
+
+Filename: internal/utils/token.go
+Content:
+package utils
+
+import (
+	"fmt"
+	"log"
+	"os"
+	
+	"strings"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
+)
+
+var jwtSecretKey []byte
+
+
+func InitializeJWT() {
+	secret := os.Getenv("JWT_SECRET_KEY")
+	if secret == "" {
+		log.Fatal("FATAL: JWT_SECRET_KEY environment variable not set!")
+	}
+	jwtSecretKey = []byte(secret)
+	log.Println("JWT Secret Key loaded.")
+}
+
+
+func GenerateToken(userID uint) (string, error) {
+	
+	
+	
+	expirationTime := time.Now().Add(24 * time.Hour) 
+	claims := jwt.MapClaims{
+		"user_id": userID,
+		"exp":     expirationTime.Unix(),
+		"iat":     time.Now().Unix(),
+		"iss":     "terraquest-backend", 
+	}
+
+	
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	
+	tokenString, err := token.SignedString(jwtSecretKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign token: %w", err)
+	}
+
+	return tokenString, nil
+}
+
+
+func ValidateToken(tokenString string) (*jwt.Token, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		
+		return jwtSecretKey, nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse token: %w", err) 
+	}
+
+	if !token.Valid {
+		return nil, fmt.Errorf("invalid token")
+	}
+
+	return token, nil
+}
+
+
+func ExtractToken(c *gin.Context) string {
+	bearerToken := c.Request.Header.Get("Authorization")
+	
+	parts := strings.Split(bearerToken, " ")
+	if len(parts) == 2 && parts[0] == "Bearer" {
+		return parts[1]
+	}
+	return ""
+}
+
+
+func ExtractUserIDFromToken(token *jwt.Token) (uint, error) {
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok || !token.Valid {
+		return 0, fmt.Errorf("invalid token claims")
+	}
+
+	
+	userIDFloat, ok := claims["user_id"].(float64)
+	if !ok {
+		return 0, fmt.Errorf("user_id claim is not a valid number")
+	}
+
+	
+	return uint(userIDFloat), nil
+}
+
+
+func ExtractUserID(c *gin.Context) (uint, error) {
+	tokenString := ExtractToken(c)
+	if tokenString == "" {
+		return 0, fmt.Errorf("authorization token not provided")
+	}
+
+	token, err := ValidateToken(tokenString)
+	if err != nil {
+		return 0, err 
+	}
+
+	return ExtractUserIDFromToken(token)
+}
+
+================================================================================
+
+Filename: scripts/populate_locations.go
+Content:
+package main
+
+import (
+	"encoding/json"
+	"encoding/xml"
+	"flag"
+	"fmt"
+	"geoguessr-backend/internal/database"
+	"io"
+	"log"
+	"math/rand"
+	"net/http"
+	"net/url"
+	"os"
+	"time"
+    "runtime"
+    "sync"
+    "sync/atomic"
+	"github.com/joho/godotenv"
+	"gorm.io/gorm"
+)
+
+
+// Add this function to limit grid locations
+func limitGridLocations(locations []CandidateLocation, maxCount int) []CandidateLocation {
+    if len(locations) <= maxCount {
+        return locations
+    }
+    
+    log.Printf("Limiting grid locations from %d to %d points", len(locations), maxCount)
+    rand.Shuffle(len(locations), func(i, j int) {
+        locations[i], locations[j] = locations[j], locations[i]
+    })
+    return locations[:maxCount]
+}
+// Region defines a geographical area for generating locations
+type Region struct {
+	Name        string  `json:"name"`
+	MinLat      float64 `json:"minLat"`
+	MaxLat      float64 `json:"maxLat"`
+	MinLng      float64 `json:"minLng"`
+	MaxLng      float64 `json:"maxLng"`
+	Description string  `json:"description"`
+	GridDensity float64 `json:"gridDensity"`
+	HasOSMData  bool    `json:"hasOSMData"`
+}
+
+// CandidateLocation represents a potential location to verify
+type CandidateLocation struct {
+	Latitude    float64 `json:"latitude"`
+	Longitude   float64 `json:"longitude"`
+	Description string  `json:"description"`
+	Source      string  `json:"source"`
+}
+
+// ProcessingStats tracks the script's progress
+type ProcessingStats struct {
+	StartTime    time.Time
+	Processed    int
+	Validated    int
+	Skipped      int
+	Errors       int
+	APICallCount int
+	BatchSize    int
+	APIRateLimit int // Calls per minute
+}
+
+// OSMResponse represents the structure of OSM Overpass API response
+type OSMResponse struct {
+	XMLName xml.Name  `xml:"osm"`
+	Nodes   []OSMNode `xml:"node"`
+	Ways    []OSMWay  `xml:"way"`
+}
+
+// OSMNode represents a node in OSM data
+type OSMNode struct {
+	ID        string   `xml:"id,attr"`
+	Lat       float64  `xml:"lat,attr"`
+	Lon       float64  `xml:"lon,attr"`
+	Tags      []OSMTag `xml:"tag"`
+	IsRoad    bool     `xml:"-"`
+	RoadIndex int      `xml:"-"`
+}
+
+// OSMWay represents a way (e.g., road) in OSM data
+type OSMWay struct {
+	ID      string     `xml:"id,attr"`
+	Nodes   []OSMNdRef `xml:"nd"`
+	Tags    []OSMTag   `xml:"tag"`
+	IsRoad  bool       `xml:"-"`
+	Purpose string     `xml:"-"`
+}
+
+// OSMNdRef references a node in a way
+type OSMNdRef struct {
+	Ref string `xml:"ref,attr"`
+}
+
+// OSMTag represents a key-value pair in OSM data
+type OSMTag struct {
+	Key   string `xml:"k,attr"`
+	Value string `xml:"v,attr"`
+}
+
+// StreetViewMetadataResponse represents the Google Street View Metadata API response
+type StreetViewMetadataResponse struct {
+	Status   string         `json:"status"`
+	Location *LatLngLiteral `json:"location"`
+}
+
+// LatLngLiteral represents a latitude-longitude pair
+type LatLngLiteral struct {
+	Lat float64 `json:"lat"`
+	Lng float64 `json:"lng"`
+}
+
+// Placeholder for database connection (replace with actual implementation)
+var db *gorm.DB
+
+type Location struct {
+	ID          uint    `gorm:"primaryKey"`
+	Latitude    float64 `gorm:"index:idx_lat_lng"`
+	Longitude   float64 `gorm:"index:idx_lat_lng"`
+	Description string
+}
+
+// loadRegions loads regions from regions.json
+func loadRegions() []Region {
+	data, err := os.ReadFile("./scripts/regions.json")
+	if err != nil {
+		log.Fatalf("Error reading regions.json: %v", err)
+	}
+	var regions []Region
+	if err := json.Unmarshal(data, &regions); err != nil {
+		log.Fatalf("Error parsing regions.json: %v", err)
+	}
+	return regions
+}
+
+// loadManualLocations loads manual locations from manual_locations.json
+func loadManualLocations() []CandidateLocation {
+	data, err := os.ReadFile("./scripts/manual_locations.json")
+	if err != nil {
+		log.Fatalf("Error reading manual_locations.json: %v", err)
+	}
+	var locations []CandidateLocation
+	if err := json.Unmarshal(data, &locations); err != nil {
+		log.Fatalf("Error parsing manual_locations.json: %v", err)
+	}
+	return locations
+}
+
+// generateGridCoordinates generates grid-based candidate locations
+func generateGridCoordinates(regions []Region) []CandidateLocation {
+	var candidates []CandidateLocation
+	for _, region := range regions {
+		latSteps := int((region.MaxLat - region.MinLat) / region.GridDensity)
+		lngSteps := int((region.MaxLng - region.MinLng) / region.GridDensity)
+		for i := 0; i <= latSteps; i++ {
+			for j := 0; j <= lngSteps; j++ {
+				lat := region.MinLat + float64(i)*region.GridDensity
+				lng := region.MinLng + float64(j)*region.GridDensity
+				if lat <= region.MaxLat && lng <= region.MaxLng {
+					candidates = append(candidates, CandidateLocation{
+						Latitude:    lat,
+						Longitude:   lng,
+						Description: fmt.Sprintf("Grid point in %s", region.Description),
+						Source:      "grid",
+					})
+				}
+			}
+		}
+	}
+	return candidates
+}
+
+// fetchOSMLocations fetches OSM-based candidate locations
+func fetchOSMLocations(region Region) ([]CandidateLocation, error) {
+	query := fmt.Sprintf(
+		`[out:xml][timeout:25];
+		(
+		    way["highway"~"^(primary|secondary|tertiary|residential)$"](%f,%f,%f,%f);
+		    node["tourism"~"^(attraction|viewpoint|museum)$"](%f,%f,%f,%f);
+		    node["amenity"~"^(cafe|restaurant|pub|bar|theatre)$"](%f,%f,%f,%f);
+		    node["leisure"~"^(park)$"](%f,%f,%f,%f);
+		    node["historic"](%f,%f,%f,%f);
+		);
+		out body;`,
+		region.MinLat, region.MinLng, region.MaxLat, region.MaxLng,
+		region.MinLat, region.MinLng, region.MaxLat, region.MaxLng,
+		region.MinLat, region.MinLng, region.MaxLat, region.MaxLng,
+		region.MinLat, region.MinLng, region.MaxLat, region.MaxLng,
+		region.MinLat, region.MinLng, region.MaxLat, region.MaxLng,
+	)
+
+	log.Printf("Sending OSM query for region %s...", region.Name)
+
+	// Create a client with timeout
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	url := "http://overpass-api.de/api/interpreter?data=" + url.QueryEscape(query)
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("OSM API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("OSM API returned status code %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	log.Printf("Received OSM response for %s, parsing XML...", region.Name)
+
+	var osmResp OSMResponse
+	if err := xml.Unmarshal(body, &osmResp); err != nil {
+		return nil, fmt.Errorf("failed to parse XML: %w", err)
+	}
+
+	log.Printf("Found %d nodes and %d ways in OSM data for %s",
+		len(osmResp.Nodes), len(osmResp.Ways), region.Name)
+
+	var coordinates []CandidateLocation
+	for _, node := range osmResp.Nodes {
+		desc := "OSM point of interest"
+		for _, tag := range node.Tags {
+			if tag.Key == "name" {
+				desc = tag.Value
+				break
+			}
+		}
+		coordinates = append(coordinates, CandidateLocation{
+			Latitude:    node.Lat,
+			Longitude:   node.Lon,
+			Description: desc,
+			Source:      "osm_poi",
+		})
+	}
+
+	for _, way := range osmResp.Ways {
+		for i, nd := range way.Nodes {
+			for _, node := range osmResp.Nodes {
+				if node.ID == nd.Ref {
+					samplingInterval := 1 // Dense sampling
+					if i%samplingInterval == 0 {
+						coordinates = append(coordinates, CandidateLocation{
+							Latitude:    node.Lat,
+							Longitude:   node.Lon,
+							Description: fmt.Sprintf("Road in %s", region.Description),
+							Source:      "osm_road",
+						})
+					}
+					break
+				}
+			}
+		}
+	}
+
+	// Limit to prevent memory issues
+	maxLocations := 10000
+	if len(coordinates) > maxLocations {
+		rand.Shuffle(len(coordinates), func(i, j int) {
+			coordinates[i], coordinates[j] = coordinates[j], coordinates[i]
+		})
+		coordinates = coordinates[:maxLocations]
+		log.Printf("Limited OSM locations to %d points for region %s", maxLocations, region.Name)
+	}
+
+	return coordinates, nil
+}
+
+// locationExistsInDB checks if a similar location exists within tolerance
+func locationExistsInDB(db *gorm.DB, lat, lng float64) (bool, uint) {
+	const tolerance = 0.0001 // ~11 meters at equator
+	var location Location
+	err := db.Where("latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ?",
+		lat-tolerance, lat+tolerance, lng-tolerance, lng+tolerance).First(&location).Error
+	if err == nil {
+		return true, location.ID
+	}
+	return false, 0
+}
+
+// saveLocationToDB saves a validated location to the database
+func saveLocationToDB(db *gorm.DB, metadata *StreetViewMetadataResponse, description string) error {
+	location := Location{
+		Latitude:    metadata.Location.Lat,
+		Longitude:   metadata.Location.Lng,
+		Description: description,
+	}
+	return db.Create(&location).Error
+}
+
+// getStreetViewMetadata calls the Google Street View Metadata API
+func getStreetViewMetadata(apiKey string, lat, lng float64) (*StreetViewMetadataResponse, error) {
+	url := fmt.Sprintf("https://maps.googleapis.com/maps/api/streetview/metadata?location=%f,%f&key=%s", lat, lng, apiKey)
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var metadata StreetViewMetadataResponse
+	if err := json.Unmarshal(body, &metadata); err != nil {
+		return nil, err
+	}
+	return &metadata, nil
+}
+
+// calculateAPIDelay calculates the delay between API calls
+func calculateAPIDelay(callsPerMinute int) time.Duration {
+	secondsPerCall := 60.0 / float64(callsPerMinute)
+	// Add 10% buffer to avoid hitting the limit
+	delaySeconds := secondsPerCall * 1.1
+	return time.Duration(delaySeconds * float64(time.Second))
+}
+
+// rateLimit enforces API call rate limits
+func rateLimit(stats *ProcessingStats, targetDelay time.Duration) {
+	if stats.APICallCount == 0 {
+		return
+	}
+	elapsed := time.Since(stats.StartTime)
+	expected := time.Duration(stats.APICallCount) * targetDelay
+	if elapsed < expected {
+		time.Sleep(expected - elapsed)
+	}
+}
+
+// logProgressStats logs processing progress
+func logProgressStats(stats ProcessingStats, current, total int) {
+	elapsed := time.Since(stats.StartTime)
+	percent := float64(current+1) / float64(total) * 100
+	log.Printf("Progress: %d/%d (%.1f%%), Validated: %d, Skipped: %d, Errors: %d, Elapsed: %v",
+		current+1, total, percent, stats.Validated, stats.Skipped, stats.Errors, elapsed)
+}
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func main() {
+    // Parse command-line flags
+    batchSize := flag.Int("batch-size", 10000, "Number of locations to process")
+    maxGrid := flag.Int("max-grid", 10000, "Maximum number of grid points to use")
+    workerCount := flag.Int("workers", runtime.NumCPU(), "Number of concurrent workers")
+    flag.Parse()
+
+    // Load environment variables
+    err := godotenv.Load()
+    if err != nil {
+        log.Println("Warning: Could not load .env file. Using environment variables directly.")
+    }
+    apiKey := os.Getenv("GOOGLE_MAPS_API_KEY")
+    if apiKey == "" {
+        log.Fatal("Error: GOOGLE_MAPS_API_KEY environment variable not set.")
+    } else {
+        log.Println("Using Google Maps API key from environment variable")
+    }
+
+    if err := database.Connect(); err != nil {
+        log.Fatalf("Error connecting to database: %v", err)
+    }
+    db := database.GetDB()
+    log.Println("Connected to database")
+
+    // Load regions and manual locations
+    regions := loadRegions()
+    manualLocations := loadManualLocations()
+    log.Printf("Loaded %d regions and %d manual locations", len(regions), len(manualLocations))
+
+    // Generate grid-based locations
+    log.Println("Generating grid coordinates...")
+    gridLocations := generateGridCoordinates(regions)
+    log.Printf("Generated %d grid-based locations", len(gridLocations))
+    
+    // Limit grid locations to avoid memory issues
+    gridLocations = limitGridLocations(gridLocations, *maxGrid)
+    log.Printf("Limited to %d grid locations", len(gridLocations))
+
+    // Combine all candidates
+    allCandidates := append(manualLocations, gridLocations...)
+    
+    // Shuffle candidates
+    rand.Seed(time.Now().UnixNano())
+    rand.Shuffle(len(allCandidates), func(i, j int) {
+        allCandidates[i], allCandidates[j] = allCandidates[j], allCandidates[i]
+    })
+
+    // Create atomic counters for stats
+    var processed, validated, skipped, errors, apiCalls int32
+    
+    // Set up processing stats
+    startTime := time.Now()
+    batchSizeToProcess := min(*batchSize, len(allCandidates))
+    
+    // Create a channel to hold work items
+    jobs := make(chan CandidateLocation, batchSizeToProcess)
+    
+    // Process rate limiting
+    rateLimit := make(chan struct{}, 50) // Allow up to 50 simultaneous API calls
+    
+    // Create wait group for workers
+    var wg sync.WaitGroup
+    
+    // Create worker goroutines
+    log.Printf("Starting %d worker goroutines", *workerCount)
+    for i := 0; i < *workerCount; i++ {
+        wg.Add(1)
+        go func(workerID int) {
+            defer wg.Done()
+            for candidate := range jobs {
+                atomic.AddInt32(&processed, 1)
+                
+                // Check if similar location exists
+                if exists, id := locationExistsInDB(db, candidate.Latitude, candidate.Longitude); exists {
+                    if workerID == 0 { // Only worker 0 logs to avoid spamming
+                        log.Printf("--> Skipped: Similar location exists (ID: %d)", id)
+                    }
+                    atomic.AddInt32(&skipped, 1)
+                    continue
+                }
+                
+                // Rate limit API calls
+                rateLimit <- struct{}{}
+                atomic.AddInt32(&apiCalls, 1)
+                
+                // Verify with Google Street View Metadata API
+                metadata, err := getStreetViewMetadata(apiKey, candidate.Latitude, candidate.Longitude)
+                <-rateLimit // Release rate limit token
+                
+                if err != nil {
+                    if workerID == 0 { // Only worker 0 logs to avoid spamming
+                        log.Printf("--> API Error: %v", err)
+                    }
+                    atomic.AddInt32(&errors, 1)
+                    continue
+                }
+                
+                // Save if valid
+                if metadata.Status == "OK" && metadata.Location != nil {
+                    err := saveLocationToDB(db, metadata, candidate.Description)
+                    if err != nil {
+                        if workerID == 0 { // Only worker 0 logs to avoid spamming
+                            log.Printf("--> DB Error: %v", err)
+                        }
+                        atomic.AddInt32(&errors, 1)
+                    } else {
+                        atomic.AddInt32(&validated, 1)
+                    }
+                } else {
+                    if workerID == 0 && metadata.Status != "ZERO_RESULTS" { // Only log unusual failures
+                        log.Printf("--> No street view found. Status: %s", metadata.Status)
+                    }
+                    atomic.AddInt32(&skipped, 1)
+                }
+                
+                // Log progress every 50 locations (from worker 0)
+                current := atomic.LoadInt32(&processed)
+                if workerID == 0 && current > 0 && current%50 == 0 {
+                    elapsed := time.Since(startTime)
+                    percent := float64(current) / float64(batchSizeToProcess) * 100
+                    log.Printf("Progress: %d/%d (%.1f%%), Validated: %d, Skipped: %d, Errors: %d, Elapsed: %v",
+                        current, batchSizeToProcess, percent, 
+                        atomic.LoadInt32(&validated), atomic.LoadInt32(&skipped), atomic.LoadInt32(&errors), 
+                        elapsed)
+                }
+            }
+        }(i)
+    }
+    
+    // Fill the jobs channel with candidates
+    for i := 0; i < batchSizeToProcess; i++ {
+        jobs <- allCandidates[i]
+    }
+    close(jobs)
+    
+    // Wait for all workers to finish
+    wg.Wait()
+    
+    // Final statistics
+    duration := time.Since(startTime)
+    log.Println("\n========== FINAL STATISTICS ==========")
+    log.Printf("Locations processed: %d", processed)
+    log.Printf("Successfully validated and saved: %d", validated)
+    log.Printf("Skipped (already exists or no coverage): %d", skipped)
+    log.Printf("Errors encountered: %d", errors)
+    log.Printf("API calls made: %d", apiCalls)
+    log.Printf("Total runtime: %v", duration)
+    log.Printf("Average processing time per location: %v", duration/time.Duration(processed))
+    log.Println("======================================")
+}
+
+================================================================================

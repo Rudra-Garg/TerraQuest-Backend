@@ -1,0 +1,72 @@
+[
+    {
+        "name": "Western Europe",
+        "minLat": 43.0,
+        "maxLat": 55.0,
+        "minLng": -5.0,
+        "maxLng": 15.0,
+        "description": "France, Germany, Italy, etc.",
+        "gridDensity": 0.05,
+        "hasOSMData": true
+    },
+    {
+        "name": "US East Coast",
+        "minLat": 35.0,
+        "maxLat": 45.0,
+        "minLng": -78.0,
+        "maxLng": -70.0,
+        "description": "Boston to Washington DC",
+        "gridDensity": 0.05,
+        "hasOSMData": true
+    },
+    {
+        "name": "Japan",
+        "minLat": 33.0,
+        "maxLat": 37.0,
+        "minLng": 135.0,
+        "maxLng": 141.0,
+        "description": "Tokyo, Kyoto, Osaka region",
+        "gridDensity": 0.1,
+        "hasOSMData": true
+    },
+    {
+        "name": "Australia East Coast",
+        "minLat": -38.0,
+        "maxLat": -28.0,
+        "minLng": 150.0,
+        "maxLng": 153.0,
+        "description": "Sydney to Brisbane",
+        "gridDensity": 0.05,
+        "hasOSMData": true
+    },
+    {
+        "name": "South Africa",
+        "minLat": -34.5,
+        "maxLat": -25.5,
+        "minLng": 18.0,
+        "maxLng": 31.0,
+        "description": "Cape Town to Johannesburg",
+        "gridDensity": 0.2,
+        "hasOSMData": true
+    },
+    {
+        "name": "US West Coast",
+        "minLat": 32.0,
+        "maxLat": 48.0,
+        "minLng": -125.0,
+        "maxLng": -115.0,
+        "description": "California to Washington",
+        "gridDensity": 0.05,
+        "hasOSMData": true
+    },
+    {
+        "name": "Brazil",
+        "minLat": -20.0,
+        "maxLat": -5.0,
+        "minLng": -55.0,
+        "maxLng": -35.0,
+        "description": "Brazilian coast and interior",
+        "gridDensity": 0.1,
+        "hasOSMData": true
+    }
+]

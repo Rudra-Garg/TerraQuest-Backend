@@ -1,222 +1,442 @@
+// scripts/populate_locations.go
 package main
 
 import (
-	"encoding/json" // To parse JSON response from Google API
+	"encoding/json"
+	// "encoding/xml" // Keep commented unless using OSM
+	"flag"
 	"fmt"
-	"io" // To read response body
+	"io"
 	"log"
-	"net/http" // To make HTTP requests
-	"net/url"  // To build URLs safely
+	"math/rand" // For shuffling
+	"net/http"
+	"net/url"
 	"os"
-	"time" // For adding delays
+	"runtime" // For NumCPU
+	"sync"
+	"sync/atomic"
+	"time"
 
-	"github.com/joho/godotenv" // For loading .env file
-	"gorm.io/gorm"             // GORM for database interaction
+	"github.com/joho/godotenv"
+	"gorm.io/gorm"
 
-	// Adjust import paths based on your go.mod file name
+	// Use internal packages
 	"geoguessr-backend/internal/database"
 	"geoguessr-backend/internal/models"
 )
 
-// --- Define Candidate Locations (Start with our mock list, expand later) ---
-// This list will be checked against the Metadata API
-var candidateLocations = []models.Location{
-	// Americas
-	{Latitude: 40.75798, Longitude: -73.9855, Description: "Times Square, NYC, USA"},
-	{Latitude: 34.0522, Longitude: -118.2437, Description: "Los Angeles, CA, USA"},
-	{Latitude: -22.9068, Longitude: -43.1729, Description: "Rio de Janeiro, Brazil"},
-	{Latitude: 45.5017, Longitude: -73.5673, Description: "Montreal, QC, Canada"},
-	{Latitude: -34.6037, Longitude: -58.3816, Description: "Buenos Aires, Argentina"},
-	{Latitude: 19.4326, Longitude: -99.1332, Description: "Mexico City, Mexico"},
-	{Latitude: 37.7749, Longitude: -122.4194, Description: "San Francisco, CA, USA"},
-	{Latitude: 49.2827, Longitude: -123.1207, Description: "Vancouver, BC, Canada"},
-	{Latitude: 64.1466, Longitude: -21.9426, Description: "Reykjavík, Iceland"},
+// --- Struct Definitions ---
 
-	// Europe
-	{Latitude: 48.8584, Longitude: 2.2945, Description: "Eiffel Tower, Paris, France"},
-	{Latitude: 51.5007, Longitude: -0.1246, Description: "Near Big Ben, London, UK"},
-	{Latitude: 41.9028, Longitude: 12.4964, Description: "Rome, Italy"},
-	{Latitude: 52.5200, Longitude: 13.4050, Description: "Berlin, Germany"},
-	{Latitude: 59.9139, Longitude: 10.7522, Description: "Oslo, Norway"},
-	{Latitude: 38.7223, Longitude: -9.1393, Description: "Lisbon, Portugal"},
-	{Latitude: 50.0755, Longitude: 14.4378, Description: "Prague, Czech Republic"},
-	{Latitude: 52.3676, Longitude: 4.9041, Description: "Amsterdam, Netherlands"},
-	{Latitude: 40.4168, Longitude: -3.7038, Description: "Madrid, Spain"},
-
-	// Asia
-	{Latitude: 35.6586, Longitude: 139.7454, Description: "Near Tokyo Tower, Japan"},
-	{Latitude: 22.3193, Longitude: 114.1694, Description: "Hong Kong"},
-	{Latitude: 1.3521, Longitude: 103.8198, Description: "Singapore"},
-	{Latitude: 37.5665, Longitude: 126.9780, Description: "Seoul, South Korea"},
-	{Latitude: 13.7563, Longitude: 100.5018, Description: "Bangkok, Thailand"},
-	{Latitude: 25.0330, Longitude: 121.5654, Description: "Taipei, Taiwan"},
-	{Latitude: 28.6139, Longitude: 77.2090, Description: "New Delhi, India"},
-	{Latitude: 31.2304, Longitude: 121.4737, Description: "Shanghai, China"},
-
-	// Africa
-	{Latitude: -33.9249, Longitude: 18.4241, Description: "Cape Town, South Africa"},
-	{Latitude: -26.2041, Longitude: 28.0473, Description: "Johannesburg, South Africa"},
-	{Latitude: 30.0444, Longitude: 31.2357, Description: "Cairo, Egypt"},
-	{Latitude: -1.2921, Longitude: 36.8219, Description: "Nairobi, Kenya"},
-	{Latitude: 6.5244, Longitude: 3.3792, Description: "Lagos, Nigeria"},
-
-	// Oceania
-	{Latitude: -33.8568, Longitude: 151.2153, Description: "Sydney Opera House, Australia"},
-	{Latitude: -37.8136, Longitude: 144.9631, Description: "Melbourne, VIC, Australia"},
-	{Latitude: -41.2865, Longitude: 174.7762, Description: "Wellington, New Zealand"},
-	{Latitude: -36.8485, Longitude: 174.7633, Description: "Auckland, New Zealand"},
-
-	// Add MANY more candidate coordinates here from lists you find or generate
+// Region defines a geographical area (from regions.json)
+type Region struct {
+	Name        string  `json:"name"`
+	MinLat      float64 `json:"minLat"`
+	MaxLat      float64 `json:"maxLat"`
+	MinLng      float64 `json:"minLng"`
+	MaxLng      float64 `json:"maxLng"`
+	Description string  `json:"description"`
+	GridDensity float64 `json:"gridDensity"`
+	HasOSMData  bool    `json:"hasOSMData"` // Flag for potential future OSM integration
 }
 
-// --- Structs to match Google API JSON response ---
+// CandidateLocation represents a potential location to verify (from files or generation)
+type CandidateLocation struct {
+	Latitude    float64 `json:"latitude"`
+	Longitude   float64 `json:"longitude"`
+	Description string  `json:"description"`
+	Source      string  `json:"source"` // e.g., "manual", "grid", "osm"
+}
+
+// StreetViewMetadataResponse represents the relevant parts of the Google API response
 type StreetViewMetadataResponse struct {
-	Copyright string        `json:"copyright"`
-	Date      string        `json:"date"`
-	Location  *LatLngLiteral `json:"location"` // Pointer to handle potential null
-	PanoID    string        `json:"pano_id"`
-	Status    string        `json:"status"` // "OK", "ZERO_RESULTS", etc.
+	Status    string         `json:"status"`    // "OK", "ZERO_RESULTS", etc.
+	Location  *LatLngLiteral `json:"location"`  // Pointer to handle potential null on non-OK status
+	Copyright string         `json:"copyright"` // Can add if needed
+	Date      string         `json:"date"`      // Can add if needed
+	PanoID    string         `json:"pano_id"`   // Can add if needed
 }
 
+// LatLngLiteral represents a latitude-longitude pair from Google API
 type LatLngLiteral struct {
-	Latitude  float64 `json:"lat"`
-	Longitude float64 `json:"lng"`
+	Lat float64 `json:"lat"`
+	Lng float64 `json:"lng"`
 }
 
-// --- Main Script Logic ---
-func main() {
-	log.Println("Starting location population script...")
+// --- Helper Functions ---
 
-	// 1. Load Environment Variables from .env file
-	err := godotenv.Load() // Load from .env in current directory
+// loadJSONFile reads and unmarshals a JSON file into the target interface
+func loadJSONFile(filePath string, target interface{}) error {
+	data, err := os.ReadFile(filePath)
 	if err != nil {
-		log.Println("Warning: Could not load .env file. Using environment variables directly.", err)
-	}
-
-	apiKey := os.Getenv("GOOGLE_MAPS_API_KEY")
-	if apiKey == "" {
-		log.Fatal("Error: GOOGLE_MAPS_API_KEY environment variable not set.")
-	}
-
-	// 2. Connect to the Database (uses connection logic from internal/database)
-	if err := database.Connect(); err != nil {
-		log.Fatalf("Error connecting to database: %v", err)
-	}
-	db := database.GetDB()
-
-	// 3. Iterate through candidates and validate
-	validatedCount := 0
-	skippedCount := 0
-	errorCount := 0
-	apiDelay := 50 * time.Millisecond // Delay between API calls to avoid hitting limits
-
-	for i, candidate := range candidateLocations {
-		log.Printf("Processing candidate %d/%d: %s (%f, %f)",
-			i+1, len(candidateLocations), candidate.Description, candidate.Latitude, candidate.Longitude)
-
-		// Check if a location with very similar coords already exists (simple check)
-		var existing models.Location
-		// Use a small tolerance for floating point comparisons
-		tolerance := 0.0001
-		result := db.Where("latitude BETWEEN ? AND ?", candidate.Latitude-tolerance, candidate.Latitude+tolerance).
-			Where("longitude BETWEEN ? AND ?", candidate.Longitude-tolerance, candidate.Longitude+tolerance).
-			First(&existing)
-
-		if result.Error == nil {
-			// Found a close match already in DB
-			log.Printf("--> Skipping: Location already exists (ID: %d)", existing.ID)
-			skippedCount++
-			time.Sleep(5 * time.Millisecond) // Shorter delay if skipping
-			continue
-		} else if result.Error != gorm.ErrRecordNotFound {
-			// Genuine DB error during check
-			log.Printf("--> DB Error checking existence: %v", result.Error)
-			errorCount++
-			time.Sleep(apiDelay) // Still pause on error
-			continue
+		// Treat missing manual file as non-fatal, just return empty
+		if os.IsNotExist(err) && filePath == "./scripts/manual_locations.json" {
+			log.Printf("Info: %s not found, skipping manual locations.", filePath)
+			return nil // Return nil to indicate okay, just no data
 		}
-		// Record not found, proceed with API validation
-
-		// --- Call Metadata API ---
-		metadata, err := getStreetViewMetadata(apiKey, candidate.Latitude, candidate.Longitude)
-		if err != nil {
-			log.Printf("--> API Error for %s: %v", candidate.Description, err)
-			errorCount++
-			time.Sleep(apiDelay) // Wait after an error too
-			continue
-		}
-
-		// --- Check Status ---
-		if metadata.Status == "OK" && metadata.Location != nil {
-			log.Printf("--> Status OK. Validated Coords: (%f, %f)", metadata.Location.Latitude, metadata.Location.Longitude)
-
-			// --- Insert into Database ---
-			newLocation := models.Location{
-				// Use coordinates returned by Google API for better accuracy
-				Latitude:    metadata.Location.Latitude,
-				Longitude:   metadata.Location.Longitude,
-				Description: candidate.Description, // Keep original description
-				// We could potentially add Country/Region here if we did reverse geocoding (later feature)
-			}
-			if err := db.Create(&newLocation).Error; err != nil {
-				log.Printf("--> DB Error inserting location: %v", err)
-				errorCount++
-			} else {
-				log.Printf("--> Successfully inserted location ID: %d", newLocation.ID)
-				validatedCount++
-			}
-		} else {
-			log.Printf("--> Status %s. Skipping.", metadata.Status)
-			skippedCount++
-		}
-
-		// --- Delay to respect potential rate limits ---
-		time.Sleep(apiDelay)
+		return fmt.Errorf("error reading %s: %w", filePath, err)
 	}
-
-	log.Println("------------------------------------")
-	log.Printf("Population script finished.")
-	log.Printf("Validated and Inserted: %d", validatedCount)
-	log.Printf("Skipped (No Coverage or Existed): %d", skippedCount)
-	log.Printf("Errors: %d", errorCount)
-	log.Println("------------------------------------")
+	if err := json.Unmarshal(data, target); err != nil {
+		return fmt.Errorf("error parsing %s: %w", filePath, err)
+	}
+	return nil
 }
 
-// --- Helper function to call Google API ---
+// generateGridCoordinates generates grid-based candidate locations for all regions
+func generateGridCoordinates(regions []Region) []CandidateLocation {
+	var candidates []CandidateLocation
+	log.Println("Generating grid coordinates...")
+	totalGenerated := 0
+	for _, region := range regions {
+		regionGenerated := 0
+		latSteps := int((region.MaxLat - region.MinLat) / region.GridDensity)
+		lngSteps := int((region.MaxLng - region.MinLng) / region.GridDensity)
+
+		// Estimate points to prevent huge loops if density is tiny
+		estimatedPoints := (latSteps + 1) * (lngSteps + 1)
+		if estimatedPoints > 1000000 { // Safety cap per region
+			log.Printf("Warning: Estimated points for region '%s' (%d) exceeds safety cap. Adjust density or bounds.", region.Name, estimatedPoints)
+			continue
+		}
+
+		for i := 0; i <= latSteps; i++ {
+			for j := 0; j <= lngSteps; j++ {
+				lat := region.MinLat + float64(i)*region.GridDensity
+				lng := region.MinLng + float64(j)*region.GridDensity
+				// Ensure point is within precise bounds (floating point safety)
+				if lat <= region.MaxLat && lng <= region.MaxLng {
+					candidates = append(candidates, CandidateLocation{
+						Latitude:    lat,
+						Longitude:   lng,
+						Description: fmt.Sprintf("Grid point in %s", region.Description),
+						Source:      "grid",
+					})
+					regionGenerated++
+				}
+			}
+		}
+		// log.Printf("Generated %d grid points for region '%s'", regionGenerated, region.Name)
+		totalGenerated += regionGenerated
+	}
+	log.Printf("Finished generating grid coordinates. Total raw grid points: %d", totalGenerated)
+	return candidates
+}
+
+// limitGridLocations randomly samples a subset if the list is too large
+func limitGridLocations(locations []CandidateLocation, maxCount int) []CandidateLocation {
+	if maxCount <= 0 || len(locations) <= maxCount {
+		return locations // No limiting needed or disabled
+	}
+	log.Printf("Limiting %d grid locations down to %d points using random sampling...", len(locations), maxCount)
+	// rand.Seed is handled in main now
+	rand.Shuffle(len(locations), func(i, j int) {
+		locations[i], locations[j] = locations[j], locations[i]
+	})
+	return locations[:maxCount]
+}
+
+// locationExistsInDB checks if a similar location exists within tolerance
+func locationExistsInDB(db *gorm.DB, lat, lng float64) (bool, uint) {
+	const tolerance = 0.001 // ~110 meters latitude, varies longitude
+	var location models.Location
+	// Only select ID for efficiency when just checking existence
+	err := db.Select("id").Where("latitude BETWEEN ? AND ?", lat-tolerance, lat+tolerance).
+		Where("longitude BETWEEN ? AND ?", lng-tolerance, lng+tolerance).
+		First(&location).Error
+
+	if err == nil {
+		return true, location.ID // Found existing
+	}
+	if err != gorm.ErrRecordNotFound {
+		// Log actual DB errors, not just "not found"
+		log.Printf("DB Check Error: %v for coords (%f, %f)", err, lat, lng)
+	}
+	return false, 0
+}
+
+// saveLocationToDB saves a validated location to the database using the internal model
+func saveLocationToDB(db *gorm.DB, metadata *StreetViewMetadataResponse, description string) (uint, error) {
+	location := models.Location{ // Use the model from internal/models
+		Latitude:    metadata.Location.Lat, // Use validated coordinates from Google
+		Longitude:   metadata.Location.Lng,
+		Description: description, // Keep original or generate based on source
+		// Country/Region could be added via reverse geocoding later
+	}
+	result := db.Create(&location) // Capture GORM result
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	return location.ID, nil // Return the ID of the newly created record
+}
+
+// getStreetViewMetadata calls the Google Street View Metadata API
 func getStreetViewMetadata(apiKey string, lat, lng float64) (*StreetViewMetadataResponse, error) {
 	baseURL := "https://maps.googleapis.com/maps/api/streetview/metadata"
-
-	// Build URL with query parameters
 	params := url.Values{}
-	params.Add("location", fmt.Sprintf("%f,%f", lat, lng))
+	params.Add("location", fmt.Sprintf("%.6f,%.6f", lat, lng)) // Use precision
 	params.Add("key", apiKey)
-	params.Add("source", "outdoor") // IMPORTANT: Filter for official coverage
-
+	params.Add("source", "outdoor") // Filter for official Google coverage
 	fullURL := baseURL + "?" + params.Encode()
 
-	// Make HTTP GET request
+	// Use default HTTP client (or configure one with timeout)
 	resp, err := http.Get(fullURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to make request: %w", err)
+		return nil, fmt.Errorf("http GET failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Read response body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
+		return nil, fmt.Errorf("failed reading response body: %w", err)
 	}
 
-	// Check for non-200 status codes (e.g., 4xx, 5xx from Google)
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("google API returned non-OK status: %s - Body: %s", resp.Status, string(body))
-	}
-
-	// Parse JSON response
+	// Try to unmarshal into the response struct regardless of HTTP status
+	// This helps capture API-level errors like OVER_QUERY_LIMIT in the JSON body
 	var metadata StreetViewMetadataResponse
-	if err := json.Unmarshal(body, &metadata); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal JSON response: %w", err)
+	jsonErr := json.Unmarshal(body, &metadata)
+
+	// Check HTTP status first
+	if resp.StatusCode != http.StatusOK {
+		errMsg := fmt.Sprintf("api http status: %s", resp.Status)
+		// If JSON parsing worked and we have a status, include it
+		if jsonErr == nil && metadata.Status != "" {
+			errMsg += fmt.Sprintf(" (API Status: %s)", metadata.Status)
+		} else {
+			// Otherwise include raw body for debugging non-JSON errors
+			errMsg += fmt.Sprintf(", body: %s", string(body))
+		}
+		return &metadata, fmt.Errorf(errMsg) // Return partial metadata if available + error
 	}
 
+	// HTTP OK, but check JSON parsing and internal status
+	if jsonErr != nil {
+		return nil, fmt.Errorf("failed unmarshalling OK response body: %w, body: %s", jsonErr, string(body))
+	}
+	if metadata.Status != "OK" {
+		// API call succeeded at HTTP level, but Google couldn't find imagery/etc.
+		return &metadata, fmt.Errorf("api status: %s", metadata.Status)
+	}
+	if metadata.Location == nil {
+		// Should not happen if status is OK, but defensively check
+		return &metadata, fmt.Errorf("api status OK but missing location data")
+	}
+
+	// If we reach here, all checks passed
 	return &metadata, nil
+}
+func loadRegions() []Region {
+	var regions []Region // Initialize empty slice
+	filePath := "./scripts/regions.json"
+	err := loadJSONFile(filePath, &regions) // <<< Use helper, pass pointer
+	if err != nil {
+		// Make region loading fatal as it's likely required
+		log.Fatalf("FATAL: %v", err)
+	}
+	log.Printf("Loaded %d regions from %s", len(regions), filePath)
+	return regions
+}
+
+// loadManualLocations loads manual locations using the helper
+func loadManualLocations() []CandidateLocation {
+	var locations []CandidateLocation // Initialize empty slice
+	filePath := "./scripts/manual_locations.json"
+	err := loadJSONFile(filePath, &locations) // <<< Use helper, pass pointer
+	if err != nil {
+		// Warn but don't make it fatal for optional manual locations
+		log.Printf("Warning: Could not load/parse %s: %v", filePath, err)
+		return []CandidateLocation{} // Return empty slice on error
+	}
+	// Handle case where file exists but is empty "[]" or if loadJSONFile returned nil error for non-existent file
+	if locations == nil {
+		locations = []CandidateLocation{}
+	}
+	log.Printf("Loaded %d manual locations from %s", len(locations), filePath)
+	return locations
+}
+
+// --- Main Logic ---
+
+func main() {
+	// --- Flags ---
+	batchSize := flag.Int("batch-size", 20000, "Max number of candidate locations to process (0 for all)")
+	maxGridPerRegion := flag.Int("max-grid", 20000, "Maximum number of grid points per region to generate (adjust based on density)") // Increased default
+	workerCount := flag.Int("workers", runtime.NumCPU(), "Number of concurrent workers")
+	apiDelayMs := flag.Int("delay", 30, "Base delay in milliseconds between API calls PER WORKER (increase if rate limited)")
+	progressInterval := flag.Int("progress", 500, "Log progress every N processed locations")
+	flag.Parse()
+
+	log.Printf("Starting population script with BatchSize=%d, MaxGridPerRegion=%d, Workers=%d, APIDelay=%dms",
+		*batchSize, *maxGridPerRegion, *workerCount, *apiDelayMs)
+
+	// --- Env & DB Setup ---
+	err := godotenv.Load() // Load .env file from current directory
+	if err != nil {
+		// Don't treat as fatal, might use system env vars
+		log.Println("Info: .env file not found or failed to load. Will rely on system environment variables.")
+	}
+	apiKey := os.Getenv("GOOGLE_MAPS_API_KEY")
+	if apiKey == "" {
+		log.Fatal("FATAL: GOOGLE_MAPS_API_KEY environment variable not set.")
+	}
+
+	if err := database.Connect(); err != nil { // Connect uses GORM logger settings from database package
+		log.Fatalf("FATAL: Error connecting to database: %v", err)
+	}
+	db := database.GetDB() // Use the getter from the database package
+	log.Println("Database connection ready.")
+
+	// --- Load Candidates ---
+	regions := loadRegions() // Calls the refactored version
+	manualLocations := loadManualLocations()
+	log.Printf("Loaded %d regions and %d manual locations.", len(regions), len(manualLocations))
+
+	gridLocations := generateGridCoordinates(regions)
+	gridLocations = limitGridLocations(gridLocations, *maxGridPerRegion*len(regions)) // Limit total grid points globally
+
+	allCandidates := append(manualLocations, gridLocations...)
+	log.Printf("Total candidate locations generated: %d", len(allCandidates))
+
+	// Shuffle and Slice candidates
+	// rand.Seed(time.Now().UnixNano()) // Seed globally once
+	rand.New(rand.NewSource(time.Now().UnixNano())) // Use non-deprecated way if needed, though Shuffle uses global
+	rand.Shuffle(len(allCandidates), func(i, j int) {
+		allCandidates[i], allCandidates[j] = allCandidates[j], allCandidates[i]
+	})
+
+	// Determine actual number to process based on batchSize flag
+	numToProcess := len(allCandidates)
+	if *batchSize > 0 && *batchSize < len(allCandidates) {
+		numToProcess = *batchSize
+		allCandidates = allCandidates[:numToProcess]
+		log.Printf("Processing first %d shuffled candidates based on batch-size flag.", numToProcess)
+	} else {
+		log.Printf("Processing all %d shuffled candidates.", numToProcess)
+	}
+	if numToProcess == 0 {
+		log.Println("No candidates to process. Exiting.")
+		return
+	}
+
+	// --- Setup Concurrency & Stats ---
+	var processed, validated, skipped, errors int32 // Atomic counters
+	startTime := time.Now()
+	apiCallDelay := time.Duration(*apiDelayMs) * time.Millisecond
+
+	jobs := make(chan CandidateLocation, numToProcess) // Buffered channel for jobs
+	resultsLog := make(chan string, *workerCount)      // Optional: channel for concise results logging
+	var wg sync.WaitGroup
+
+	// --- Start Workers ---
+	log.Printf("Launching %d workers...", *workerCount)
+	for i := 0; i < *workerCount; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			// Small initial stagger for workers
+			time.Sleep(time.Duration(rand.Intn(50*workerID+10)) * time.Millisecond)
+
+			for candidate := range jobs {
+				currentProcessed := atomic.AddInt32(&processed, 1) // Increment processed count first
+
+				// 1. Check DB Existence
+				exists, existingID := locationExistsInDB(db, candidate.Latitude, candidate.Longitude)
+				if exists {
+					atomic.AddInt32(&skipped, 1)
+					resultsLog <- fmt.Sprintf("W%d SkipExist: %d", workerID, existingID) // Optional detailed log
+					continue                                                             // Skip to next job
+				}
+
+				// 2. Call Google Metadata API (with delay)
+				time.Sleep(apiCallDelay) // Apply delay before each API call for this worker
+				metadata, err := getStreetViewMetadata(apiKey, candidate.Latitude, candidate.Longitude)
+
+				// 3. Handle API Response/Error
+				if err != nil {
+					errMsg := err.Error()
+					statusMsg := ""
+					if metadata != nil { // Metadata might be non-nil even on error (e.g., status errors)
+						statusMsg = metadata.Status
+					}
+
+					// Check if it's just ZERO_RESULTS (expected skip)
+					if statusMsg == "ZERO_RESULTS" || errMsg == "api status: ZERO_RESULTS" {
+						atomic.AddInt32(&skipped, 1)
+						// resultsLog <- fmt.Sprintf("W%d SkipAPI(ZERO): %.4f,%.4f", workerID, candidate.Latitude, candidate.Longitude)
+					} else {
+						// Log other errors more visibly
+						log.Printf("Worker %d API Error: %v (Status: %s) for Candidate: %.4f,%.4f (%s)",
+							workerID, err, statusMsg, candidate.Latitude, candidate.Longitude, candidate.Source)
+						atomic.AddInt32(&errors, 1)
+					}
+					continue // Skip to next job
+				}
+
+				// 4. Save Valid Location to DB (Status is guaranteed OK here)
+				newID, dbErr := saveLocationToDB(db, metadata, candidate.Description)
+				if dbErr != nil {
+					log.Printf("Worker %d DB Error saving %.4f,%.4f: %v", workerID, metadata.Location.Lat, metadata.Location.Lng, dbErr)
+					atomic.AddInt32(&errors, 1)
+				} else {
+					atomic.AddInt32(&validated, 1)
+					resultsLog <- fmt.Sprintf("Saved %d: %.4f,%.4f (%s)", newID, metadata.Location.Lat, metadata.Location.Lng, candidate.Description) // Log success
+				}
+
+				// --- Log Progress Periodically (from worker 0) ---
+				if workerID == 0 && int(currentProcessed)%(*progressInterval) == 0 {
+					elapsed := time.Since(startTime).Round(time.Second)
+					percent := float64(currentProcessed) / float64(numToProcess) * 100
+					v := atomic.LoadInt32(&validated)
+					s := atomic.LoadInt32(&skipped)
+					e := atomic.LoadInt32(&errors)
+					log.Printf("Progress: %d/%d (%.1f%%) | Valid: %d | Skip: %d | Err: %d | Elapsed: %v",
+						currentProcessed, numToProcess, percent, v, s, e, elapsed)
+				}
+			}
+		}(i)
+	}
+
+	// --- Feed Jobs ---
+	log.Printf("Feeding %d jobs to workers...", numToProcess)
+	for i := 0; i < numToProcess; i++ {
+		jobs <- allCandidates[i]
+	}
+	close(jobs) // Signal no more jobs are coming
+	log.Println("All jobs sent.")
+
+	// --- Process Results Log (Optional) ---
+	// Goroutine to handle logging results concurrently without blocking workers
+	var logWg sync.WaitGroup
+	logWg.Add(1)
+	go func() {
+		defer logWg.Done()
+		count := 0
+		for res := range resultsLog {
+			log.Println(res) // Log each saved item
+			count++
+		}
+		log.Printf("Result logger finished after receiving %d messages.", count)
+	}()
+
+	// --- Wait & Final Stats ---
+	log.Println("Waiting for workers to finish processing...")
+	wg.Wait()         // Wait for all workers in the main WaitGroup
+	close(resultsLog) // Close the results channel *after* all workers are done sending
+	logWg.Wait()      // Wait for the result logger goroutine to finish processing the channel
+	log.Println("All workers finished.")
+
+	duration := time.Since(startTime).Round(time.Second)
+	finalProcessed := atomic.LoadInt32(&processed)
+	finalValidated := atomic.LoadInt32(&validated)
+	finalSkipped := atomic.LoadInt32(&skipped)
+	finalErrors := atomic.LoadInt32(&errors)
+
+	log.Println("\n========== FINAL STATISTICS ==========")
+	log.Printf("Total Candidates Processed: %d", finalProcessed)
+	log.Printf("Successfully Validated & Saved: %d", finalValidated)
+	log.Printf("Skipped (Exists or No Coverage): %d", finalSkipped)
+	log.Printf("Errors (API or DB): %d", finalErrors)
+	log.Printf("Total Runtime: %v", duration)
+	if finalProcessed > 0 {
+		log.Printf("Avg. Time/Candidate: %v", duration/time.Duration(finalProcessed))
+	}
+	log.Println("======================================")
 }

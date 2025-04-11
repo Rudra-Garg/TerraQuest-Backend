@@ -1,0 +1,159 @@
+basePath: /api/v1
+definitions:
+  models.LoginInput:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  models.RegisterInput:
+    properties:
+      email:
+        type: string
+      password:
+        maxLength: 72
+        minLength: 6
+        type: string
+      username:
+        maxLength: 50
+        minLength: 3
+        type: string
+    required:
+    - email
+    - password
+    - username
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@example.com <-- Update later
+    name: API Support
+    url: http://www.example.com/support <-- Update later
+  description: API Server for the TerraQuest GeoGuessr clone game.
+  license:
+    name: Apache 2.0  <-- Or your chosen license
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/  <-- Update later
+  title: TerraQuest Backend API
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates a user with email and password, returns a JWT token
+        upon success.
+      parameters:
+      - description: User Login Credentials
+        in: body
+        name: credentials
+        required: true
+        schema:
+          $ref: '#/definitions/models.LoginInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Login successful (returns JWT token and basic user info)
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid input format or validation failed
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Invalid credentials (user not found or password mismatch)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error (DB find, token generation)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Log in a user
+      tags:
+      - Auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new user account with username, email, and password.
+      parameters:
+      - description: User Registration Info
+        in: body
+        name: userInput
+        required: true
+        schema:
+          $ref: '#/definitions/models.RegisterInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: User registered successfully (returns basic user info)
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid input format or validation failed
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: 'Conflict: Username or Email already exists'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error (hashing, DB create)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Register a new user
+      tags:
+      - Auth
+  /game/start:
+    get:
+      description: Fetches a specified number of random locations for a new game session.
+      parameters:
+      - description: 'Number of rounds (default: 5)'
+        in: query
+        maximum: 10
+        name: rounds
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Game started successfully (returns gameId placeholder and locations)
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error (failed to fetch locations)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Start a new game
+      tags:
+      - Game
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

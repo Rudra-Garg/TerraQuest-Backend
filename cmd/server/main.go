@@ -8,71 +8,99 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 
-	// Import your packages
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+
+	"github.com/go-openapi/runtime/middleware"
+
+	_ "geoguessr-backend/docs" // for swagger docs
 	"geoguessr-backend/internal/database"
 	"geoguessr-backend/internal/handlers"
-	"geoguessr-backend/internal/utils" // <<< Import handlers
+	"geoguessr-backend/internal/utils"
+	internalMiddleware "geoguessr-backend/internal/middleware" 
 )
+
+// @title           TerraQuest Backend API
+// @version         1.0
+// @description     API Server for the TerraQuest GeoGuessr clone game.
+// @termsOfService  http://swagger.io/terms/  <-- Update later
+
+// @contact.name   API Support
+// @contact.url    http://www.example.com/support <-- Update later
+// @contact.email  support@example.com <-- Update later
+
+// @license.name  Apache 2.0  <-- Or your chosen license
+// @license.url   http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host      localhost:8080
+// @BasePath  /api/v1
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
 
 func main() {
 	log.Println("Starting GeoGuessr Backend Server...")
 
-	err := godotenv.Load() // Load environment variables from .env file
+	err := godotenv.Load()
 	if err != nil {
 		log.Println("No .env file found, using system environment variables.")
 	}
-	
+
 	utils.InitializeJWT()
-	// 1. Initialize Database Connection
+
 	err = database.Connect()
 	if err != nil {
 		log.Fatalf("Could not connect to the database: %v", err)
 	}
 
-	// 2. Create Gin router
 	router := gin.Default()
 
-
-	// --- Configure CORS ---
-	// Allow requests specifically from your frontend development server
 	config := cors.DefaultConfig()
-	// config.AllowAllOrigins = true // Less secure, okay for quick local test but specify origin below
-	config.AllowOrigins = []string{"http://localhost:5173"} // <<< Your frontend origin
-	config.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"} // Allowed methods
-	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"} // Allowed headers
-	// config.ExposeHeaders = []string{"Content-Length"} // Optional: Headers frontend can access
-	// config.AllowCredentials = true // Optional: If you need cookies/auth headers
 
-	router.Use(cors.New(config)) // <<< Apply CORS middleware GLOBALLY
-	// -----------------------
+	config.AllowOrigins = []string{"http://localhost:5173"}
+	config.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
+	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
 
+	router.Use(cors.New(config))
 
-	// --- API Routes ---
-	// Group API routes under /api/v1
+	router.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	log.Println("Swagger UI available at http://localhost:8080/docs/index.html")
+
+	opts := middleware.RedocOpts{
+		SpecURL: "/docs/doc.json",
+		Path:    "/redoc",
+		Title:   "TerraQuest API Docs (ReDoc)",
+	}
+	redocHandler := middleware.Redoc(opts, nil)
+	router.GET("/redoc", gin.WrapH(redocHandler))
+	log.Println("ReDoc UI available at http://localhost:8080/redoc")
+
 	api := router.Group("/api/v1")
 	{
-		// Health check/ping remains accessible
-		// router.GET("/ping", func(c *gin.Context) { ... }) // Or move ping inside api group?
-
-		gameGroup := api.Group("/game")
+		authGroup := api.Group("/auth")
 		{
-			// Route to start a new game and get locations
-			gameGroup.GET("/start", handlers.StartGame) // <<< Register the handler
-
-			// Add other game-related routes here later (e.g., POST /submit-guess)
+			authGroup.POST("/register", handlers.Register)
+			authGroup.POST("/login", handlers.Login)
+		}
+		
+		// Game routes - apply auth middleware here
+		gameGroup := api.Group("/game")
+		// Apply AuthRequired middleware to all routes within this group
+		gameGroup.Use(internalMiddleware.AuthRequired()) // <<< APPLY MIDDLEWARE
+		{
+			gameGroup.GET("/start", handlers.StartGame)
+			gameGroup.POST("/finish", handlers.FinishGame)
 		}
 
-		// Add other groups later (e.g., /users, /leaderboard)
 	}
 
-	// Add the original ping route outside the API group if desired
 	router.GET("/ping", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "pong"})
 	})
 
-
-	// 4. Start the server
-	port := ":8080" // Ensure this matches frontend expectation or use env var
+	port := ":8080"
 	log.Printf("Server listening on port %s\n", port)
 	err = router.Run(port)
 	if err != nil {
