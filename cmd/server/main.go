@@ -16,8 +16,8 @@ import (
 	_ "geoguessr-backend/docs" // for swagger docs
 	"geoguessr-backend/internal/database"
 	"geoguessr-backend/internal/handlers"
+	internalMiddleware "geoguessr-backend/internal/middleware"
 	"geoguessr-backend/internal/utils"
-	internalMiddleware "geoguessr-backend/internal/middleware" 
 )
 
 // @title           TerraQuest Backend API
@@ -55,6 +55,10 @@ func main() {
 		log.Fatalf("Could not connect to the database: %v", err)
 	}
 
+	// Initialize WebSocket hub
+	// hub := websocket.NewHub()
+	// go hub.Run()
+
 	router := gin.Default()
 
 	config := cors.DefaultConfig()
@@ -84,7 +88,7 @@ func main() {
 			authGroup.POST("/register", handlers.Register)
 			authGroup.POST("/login", handlers.Login)
 		}
-		
+
 		// Game routes - apply auth middleware here
 		gameGroup := api.Group("/game")
 		// Apply AuthRequired middleware to all routes within this group
@@ -92,6 +96,11 @@ func main() {
 		{
 			gameGroup.GET("/start", handlers.StartGame)
 			gameGroup.POST("/finish", handlers.FinishGame)
+
+			// // WebSocket endpoint for multiplayer
+			// gameGroup.GET("/ws", func(c *gin.Context) {
+			// 	websocket.ServeWs(hub, c)
+			// })
 		}
 
 	}

@@ -7,7 +7,8 @@
         "maxLng": 15.0,
         "description": "France, Germany, Italy, etc.",
         "gridDensity": 0.05,
-        "hasOSMData": true
+        "hasOSMData": true,
+        "include": false
     },
     {
         "name": "US East Coast",
@@ -17,7 +18,8 @@
         "maxLng": -70.0,
         "description": "Boston to Washington DC",
         "gridDensity": 0.05,
-        "hasOSMData": true
+        "hasOSMData": true,
+        "include": false
     },
     {
         "name": "Japan",
@@ -27,7 +29,8 @@
         "maxLng": 141.0,
         "description": "Tokyo, Kyoto, Osaka region",
         "gridDensity": 0.1,
-        "hasOSMData": true
+        "hasOSMData": true,
+        "include": false
     },
     {
         "name": "Australia East Coast",
@@ -37,7 +40,42 @@
         "maxLng": 153.0,
         "description": "Sydney to Brisbane",
         "gridDensity": 0.05,
-        "hasOSMData": true
+        "hasOSMData": true,
+        "include": false
+    },
+    {
+        "name": "India",
+        "minLat": 8.0,
+        "maxLat": 37.0,
+        "minLng": 78.0,
+        "maxLng": 92.0,
+        "description": "Delhi, Mumbai, Bangalore region",
+        "gridDensity": 0.1,
+        "hasOSMData": true,
+        "include": true
+    },
+    {
+        "name": "Canada",
+        "minLat": 42.0,
+        "maxLat": 60.0,
+        "minLng": -140.0,
+        "maxLng": -50.0,
+        "description": "Toronto to Vancouver",
+        "gridDensity": 0.05,
+        "hasOSMData": true,
+        "include": false
+    },
+    
+    {
+        "name": "Central Africa",
+        "minLat": -20.0,
+        "maxLat": 10.0,
+        "minLng": 10.0,
+        "maxLng": 40.0,
+        "description": "Democratic Republic of the Congo region",
+        "gridDensity": 0.1,
+        "hasOSMData": true,
+        "include": false
     },
     {
         "name": "South Africa",
@@ -46,8 +84,9 @@
         "minLng": 18.0,
         "maxLng": 31.0,
         "description": "Cape Town to Johannesburg",
-        "gridDensity": 0.2,
-        "hasOSMData": true
+        "gridDensity": 0.1,
+        "hasOSMData": true,
+        "include": false
     },
     {
         "name": "US West Coast",
@@ -57,7 +96,8 @@
         "maxLng": -115.0,
         "description": "California to Washington",
         "gridDensity": 0.05,
-        "hasOSMData": true
+        "hasOSMData": true,
+        "include": false
     },
     {
         "name": "Brazil",
@@ -67,6 +107,62 @@
         "maxLng": -35.0,
         "description": "Brazilian coast and interior",
         "gridDensity": 0.1,
-        "hasOSMData": true
+        "hasOSMData": true,
+        "include": false
+    },
+    {
+        "name": "Scandinavia",
+        "minLat": 55.0,
+        "maxLat": 70.0,
+        "minLng": 5.0,
+        "maxLng": 30.0,
+        "description": "Norway, Sweden, Finland",
+        "gridDensity": 0.07,
+        "hasOSMData": true,
+        "include": true
+    },
+    {
+        "name": "Southeast Asia",
+        "minLat": -10.0,
+        "maxLat": 15.0,
+        "minLng": 95.0,
+        "maxLng": 130.0,
+        "description": "Thailand, Vietnam, Indonesia, etc.",
+        "gridDensity": 0.1,
+        "hasOSMData": true,
+        "include": true
+    },
+    {
+        "name": "Middle East",
+        "minLat": 20.0,
+        "maxLat": 35.0,
+        "minLng": 35.0,
+        "maxLng": 60.0,
+        "description": "Saudi Arabia, Iran, Iraq, etc.",
+        "gridDensity": 0.08,
+        "hasOSMData": true,
+        "include": true
+    },
+    {
+        "name": "Eastern Europe",
+        "minLat": 45.0,
+        "maxLat": 60.0,
+        "minLng": 20.0,
+        "maxLng": 40.0,
+        "description": "Poland, Ukraine, Russia, etc.",
+        "gridDensity": 0.06,
+        "hasOSMData": true,
+        "include": true
+    },
+    {
+        "name": "Andes Mountains",
+        "minLat": -40.0,
+        "maxLat": -10.0,
+        "minLng": -75.0,
+        "maxLng": -65.0,
+        "description": "Chile, Peru, Bolivia region",
+        "gridDensity": 0.09,
+        "hasOSMData": true,
+        "include": true
     }
 ]

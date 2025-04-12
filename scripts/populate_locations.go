@@ -36,7 +36,8 @@ type Region struct {
 	MaxLng      float64 `json:"maxLng"`
 	Description string  `json:"description"`
 	GridDensity float64 `json:"gridDensity"`
-	HasOSMData  bool    `json:"hasOSMData"` // Flag for potential future OSM integration
+	HasOSMData  bool    `json:"hasOSMData"`
+	Include     bool    `json:"include"` // New field to determine if the region should be included
 }
 
 // CandidateLocation represents a potential location to verify (from files or generation)
@@ -87,6 +88,10 @@ func generateGridCoordinates(regions []Region) []CandidateLocation {
 	log.Println("Generating grid coordinates...")
 	totalGenerated := 0
 	for _, region := range regions {
+		if !region.Include {
+			log.Printf("Skipping region '%s' as it is marked to be excluded.", region.Name)
+			continue
+		}
 		regionGenerated := 0
 		latSteps := int((region.MaxLat - region.MinLat) / region.GridDensity)
 		lngSteps := int((region.MaxLng - region.MinLng) / region.GridDensity)
@@ -114,7 +119,6 @@ func generateGridCoordinates(regions []Region) []CandidateLocation {
 				}
 			}
 		}
-		// log.Printf("Generated %d grid points for region '%s'", regionGenerated, region.Name)
 		totalGenerated += regionGenerated
 	}
 	log.Printf("Finished generating grid coordinates. Total raw grid points: %d", totalGenerated)
@@ -257,10 +261,10 @@ func loadManualLocations() []CandidateLocation {
 
 func main() {
 	// --- Flags ---
-	batchSize := flag.Int("batch-size", 20000, "Max number of candidate locations to process (0 for all)")
+	batchSize := flag.Int("batch-size", 0, "Max number of candidate locations to process (0 for all)")
 	maxGridPerRegion := flag.Int("max-grid", 20000, "Maximum number of grid points per region to generate (adjust based on density)") // Increased default
-	workerCount := flag.Int("workers", runtime.NumCPU(), "Number of concurrent workers")
-	apiDelayMs := flag.Int("delay", 30, "Base delay in milliseconds between API calls PER WORKER (increase if rate limited)")
+	workerCount := flag.Int("workers", runtime.NumCPU()*2, "Number of concurrent workers")
+	apiDelayMs := flag.Int("delay", 25, "Base delay in milliseconds between API calls PER WORKER (increase if rate limited)")
 	progressInterval := flag.Int("progress", 500, "Log progress every N processed locations")
 	flag.Parse()
 
