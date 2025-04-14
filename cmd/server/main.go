@@ -59,9 +59,14 @@ func main() {
 
 	config := cors.DefaultConfig()
 
-	config.AllowOrigins = []string{"http://localhost:5173"}
+	// Update AllowOrigins to include both local development and production URLs
+	config.AllowOrigins = []string{
+	    "http://localhost:5173",
+	    "https://rudra-garg.github.io",
+	}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
 	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
+	config.AllowCredentials = true  // Add this if you're sending credentials (cookies, auth headers)
 
 	router.Use(cors.New(config))
 
