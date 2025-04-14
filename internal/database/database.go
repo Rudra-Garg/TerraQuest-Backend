@@ -5,12 +5,12 @@ import (
 	"log"
 	"os"
 	"time"
+
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
 	"geoguessr-backend/internal/models"
-
 )
 
 var DB *gorm.DB
@@ -47,7 +47,6 @@ func Connect() error {
 	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=UTC",
 		dbHost, dbUser, dbPassword, dbName, dbPort, dbSSLMode)
 
-	
 	logLevel := logger.Warn // <<< Change from logger.Info to logger.Warn
 	if os.Getenv("GORM_LOG_LEVEL") == "info" {
 		logLevel = logger.Info // Allow overriding via env var if needed
@@ -57,7 +56,7 @@ func Connect() error {
 		log.New(os.Stdout, "\r\n", log.LstdFlags), // io writer
 		logger.Config{
 			SlowThreshold:             time.Second * 2, // Slow SQL threshold (optional)
-			LogLevel:                  logLevel,         // Set the desired log level
+			LogLevel:                  logLevel,        // Set the desired log level
 			IgnoreRecordNotFoundError: true,            // Don't log ErrRecordNotFound errors (usually expected)
 			ParameterizedQueries:      false,           // Don't include params in Info level logs (optional)
 			Colorful:                  true,            // Enable color (optional)

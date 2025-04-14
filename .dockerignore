@@ -1,0 +1,35 @@
+# Git specific
+.git
+.gitignore
+
+# IDE/Editor specific
+.vscode/
+*.code-workspace
+
+# Go cache/modules (downloaded inside container)
+vendor/
+
+# Local environment files
+.env*
+
+# Build artifacts (if any created locally)
+bin/
+server
+
+# OS specific
+*~
+.DS_Store
+
+# Documentation/Scripts not needed in runtime image
+README.md
+scripts/
+geoguessr.session.sql
+repo_contents.txt
+*.log
+
+# Docker specific files (if they exist at root)
+# Dockerfile
+# docker-compose.yml
+pg_dump
+database.bak
+backup.sql
