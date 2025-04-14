@@ -55,10 +55,6 @@ func main() {
 		log.Fatalf("Could not connect to the database: %v", err)
 	}
 
-	// Initialize WebSocket hub
-	// hub := websocket.NewHub()
-	// go hub.Run()
-
 	router := gin.Default()
 
 	config := cors.DefaultConfig()
@@ -97,10 +93,6 @@ func main() {
 			gameGroup.GET("/start", handlers.StartGame)
 			gameGroup.POST("/finish", handlers.FinishGame)
 
-			// // WebSocket endpoint for multiplayer
-			// gameGroup.GET("/ws", func(c *gin.Context) {
-			// 	websocket.ServeWs(hub, c)
-			// })
 		}
 
 	}
