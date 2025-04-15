@@ -59,12 +59,12 @@ func main() {
 
 	config := cors.DefaultConfig()
 
-	// Update AllowOrigins to include both local development and production URLs
-	config.AllowAllOrigins = true
-
+	// Allow specific origins instead of all origins
+	config.AllowOrigins = []string{"http://localhost:5173", "https://rudra-garg.github.io"}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
 	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
-	config.AllowCredentials = true // Add this if you're sending credentials (cookies, auth headers)
+	config.AllowCredentials = true // This is required for credentials to work
+	config.ExposeHeaders = []string{"Content-Length"}
 
 	router.Use(cors.New(config))
 
@@ -99,12 +99,18 @@ func main() {
 
 		// Multiplayer game routes
 		multiplayerGroup := api.Group("/multiplayer")
-		multiplayerGroup.Use(internalMiddleware.AuthRequired())
 		{
-			multiplayerGroup.POST("/create", handlers.CreateMultiplayerGame)
-			multiplayerGroup.POST("/join/:gameCode", handlers.JoinMultiplayerGame)
-			multiplayerGroup.GET("/game/:gameId", handlers.GetMultiplayerGameState)
-			multiplayerGroup.GET("/ws", handlers.HandleWebSocket) // WebSocket endpoint
+			// Routes that require authentication
+			authMultiplayerGroup := multiplayerGroup.Group("/")
+			authMultiplayerGroup.Use(internalMiddleware.AuthRequired())
+			{
+				authMultiplayerGroup.POST("/create", handlers.CreateMultiplayerGame)
+				authMultiplayerGroup.POST("/join/:gameCode", handlers.JoinMultiplayerGame)
+				authMultiplayerGroup.GET("/game/:gameId", handlers.GetMultiplayerGameState)
+			}
+
+			// WebSocket endpoint - auth is handled in the handler
+			multiplayerGroup.GET("/ws", handlers.HandleWebSocket)
 		}
 	}
 

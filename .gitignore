@@ -1,3 +1,6 @@
 .env
 .vscode
 repo_contents.txt
+backup.sql
+database.bak
+pg_dump
