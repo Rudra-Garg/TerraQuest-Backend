@@ -3,7 +3,6 @@ package models
 
 import (
 	"time"
-
 )
 
 // Game represents a completed game session by a user
@@ -18,6 +17,7 @@ type Game struct {
 
 	Rounds []Round `gorm:"foreignKey:GameID"` // GORM association (has many Rounds)
 }
+
 // RoundResultInput represents the data for a single round sent from frontend
 type RoundResultInput struct {
 	RoundNumber int     `json:"roundNumber" validate:"required,min=1"`
