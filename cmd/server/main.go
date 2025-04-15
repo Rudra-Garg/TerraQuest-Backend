@@ -59,14 +59,16 @@ func main() {
 
 	config := cors.DefaultConfig()
 
+
 	// Update AllowOrigins to include both local development and production URLs
 	config.AllowOrigins = []string{
-	    "http://localhost:5173",
-	    "https://rudra-garg.github.io",
+	    "http://localhost:5173/*",
+	    "https://rudra-garg.github.io/*",
 	}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
 	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
 	config.AllowCredentials = true  // Add this if you're sending credentials (cookies, auth headers)
+
 
 	router.Use(cors.New(config))
 
@@ -97,9 +99,17 @@ func main() {
 		{
 			gameGroup.GET("/start", handlers.StartGame)
 			gameGroup.POST("/finish", handlers.FinishGame)
-
 		}
 
+		// Multiplayer game routes
+		multiplayerGroup := api.Group("/multiplayer")
+		multiplayerGroup.Use(internalMiddleware.AuthRequired())
+		{
+			multiplayerGroup.POST("/create", handlers.CreateMultiplayerGame)
+			multiplayerGroup.POST("/join/:gameCode", handlers.JoinMultiplayerGame)
+			multiplayerGroup.GET("/game/:gameId", handlers.GetMultiplayerGameState)
+			multiplayerGroup.GET("/ws", handlers.HandleWebSocket) // WebSocket endpoint
+		}
 	}
 
 	router.GET("/ping", func(c *gin.Context) {
