@@ -1,0 +1,41 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  # The build command that will be executed
+  cmd = "go build -o ./tmp/main.exe ./cmd/server"
+  # Binary file yields from `cmd`
+  bin = "tmp/main.exe"
+  # Watch these directories for changes
+  include_dir = ["cmd", "internal", "pkg"]
+  # Exclude these directories from watching
+  exclude_dir = ["tmp", "vendor"]
+  # Watch these file extensions
+  include_ext = ["go", "env"]
+  # Exclude files with these patterns
+  exclude_regex = ["_test\\.go"]
+  # Customize binary args for execution
+  args_bin = []
+  # This delay is for preventing multiple builds
+  delay = 1000
+  # Stop running the app on build errors
+  stop_on_error = true
+  # Kill process before starting a new one
+  send_interrupt = false
+  # Send a KILL signal if the process still doesn't terminate
+  kill_delay = "0s"
+
+[log]
+  # Show log time
+  time = true
+
+[color]
+  # Customize each part's color
+  main = "magenta"
+  watcher = "cyan"
+  build = "yellow"
+  runner = "green"
+
+[misc]
+  # Clean tmp dir before starting
+  clean_on_exit = true

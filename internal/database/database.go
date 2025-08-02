@@ -79,10 +79,12 @@ func Connect() error {
 		&models.Location{},
 		&models.User{},
 		&models.Game{},
-		&models.Round{},
-		&models.MultiplayerGame{},
-		&models.MultiplayerSession{},
-		&models.MultiplayerRound{},
+		&models.Round{},      
+        &models.MultiplayerGame{},    
+        &models.MultiplayerSession{},
+		&models.MultiplayerGameLocation{},
+		&models.MultiplayerRound{}, 
+
 	)
 	if err != nil {
 		return fmt.Errorf("failed to auto migrate database: %w", err)

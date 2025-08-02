@@ -97,26 +97,28 @@ func main() {
 			gameGroup.POST("/finish", handlers.FinishGame)
 		}
 
-		// Multiplayer game routes
+		// --- Multiplayer Routes ---
 		multiplayerGroup := api.Group("/multiplayer")
 		{
-			// Routes that require authentication
-			authMultiplayerGroup := multiplayerGroup.Group("/")
-			authMultiplayerGroup.Use(internalMiddleware.AuthRequired())
+			// HTTP routes requiring authentication
+			authMultiplayer := multiplayerGroup.Group("/") // Base for authenticated routes
+			authMultiplayer.Use(internalMiddleware.AuthRequired())
 			{
-				authMultiplayerGroup.POST("/create", handlers.CreateMultiplayerGame)
-				authMultiplayerGroup.POST("/join/:gameCode", handlers.JoinMultiplayerGame)
-				authMultiplayerGroup.GET("/game/:gameId", handlers.GetMultiplayerGameState)
+				authMultiplayer.POST("/create", handlers.CreateMultiplayerGame)
+				authMultiplayer.POST("/join/:gameCode", handlers.JoinMultiplayerGame)
+				authMultiplayer.GET("/game/:gameId", handlers.GetMultiplayerGameState) // Basic state GET
 			}
 
-			// WebSocket endpoint - auth is handled in the handler
+			// WebSocket endpoint - Authentication handled within the handler itself via token param
 			multiplayerGroup.GET("/ws", handlers.HandleWebSocket)
 		}
+		// --- End Multiplayer Routes ---
 	}
 
 	router.GET("/ping", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "pong"})
 	})
+	
 
 	port := ":8080"
 	log.Printf("Server listening on port %s\n", port)
