@@ -60,7 +60,7 @@ func main() {
 	config := cors.DefaultConfig()
 
 	// Allow specific origins instead of all origins
-	config.AllowOrigins = []string{"http://localhost:5173", "https://rudra-garg.github.io"}
+	config.AllowOrigins = []string{"http://localhost:5173", "https://rudra-garg.github.io", "https://terraquest.rudragarg.dev"}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
 	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
 	config.AllowCredentials = true // This is required for credentials to work
