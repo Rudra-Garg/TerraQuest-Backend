@@ -20,14 +20,14 @@ import (
 	"geoguessr-backend/internal/utils"
 )
 
-// @title           TerraQuest Backend API
-// @version         1.0
-// @description     API Server for the TerraQuest GeoGuessr clone game.
+// @title TerraQuest Backend API
+// @version 1.0
+// @description API Server for the TerraQuest GeoGuessr clone game.
 // @termsOfService  http://swagger.io/terms/  <-- Update later
 
-// @contact.name   API Support
+// @contact.name API Support
 // @contact.url    http://www.example.com/support <-- Update later
-// @contact.email  support@example.com <-- Update later
+// @contact.email support@example.com <-- Update later
 
 // @license.name  Apache 2.0  <-- Or your chosen license
 // @license.url   http://www.apache.org/licenses/LICENSE-2.0.html
@@ -86,6 +86,7 @@ func main() {
 		{
 			authGroup.POST("/register", handlers.Register)
 			authGroup.POST("/login", handlers.Login)
+			authGroup.POST("/reset-password", handlers.ResetPassword)
 		}
 
 		// Game routes - apply auth middleware here
@@ -95,6 +96,19 @@ func main() {
 		{
 			gameGroup.GET("/start", handlers.StartGame)
 			gameGroup.POST("/finish", handlers.FinishGame)
+			gameGroup.GET("/history", handlers.GetGameHistory)
+		}
+
+		userGroup := api.Group("/user")
+		userGroup.Use(internalMiddleware.AuthRequired())
+		{
+			userGroup.GET("/profile", handlers.GetProfile)
+		}
+
+		leaderboardGroup := api.Group("/leaderboard")
+		leaderboardGroup.Use(internalMiddleware.AuthRequired())
+		{
+			leaderboardGroup.GET("", handlers.GetLeaderboard)
 		}
 
 		// --- Multiplayer Routes ---
@@ -118,7 +132,6 @@ func main() {
 	router.GET("/ping", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "pong"})
 	})
-	
 
 	port := ":8080"
 	log.Printf("Server listening on port %s\n", port)

@@ -1,23 +1,32 @@
-
 package handlers
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"log"
 	"net/http"
-	"strings" 
+	"strconv"
+	"strings"
 
-	"geoguessr-backend/internal/database" 
-	"geoguessr-backend/internal/models"    
-	"geoguessr-backend/internal/utils"     
+	"geoguessr-backend/internal/database"
+	"geoguessr-backend/internal/models"
+	"geoguessr-backend/internal/utils"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-playground/validator/v10" 
+	"github.com/go-playground/validator/v10"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
-
 var validate = validator.New()
+
+func generateRandomCode(n int) string {
+	bytes := make([]byte, n)
+	if _, err := rand.Read(bytes); err != nil {
+		return "RECOVERY-123-ABC" // Fallback
+	}
+	return hex.EncodeToString(bytes)[:n]
+}
 
 // Register godoc
 // @Summary      Register a new user
@@ -34,30 +43,27 @@ var validate = validator.New()
 func Register(c *gin.Context) {
 	var input models.RegisterInput
 
-	
 	if err := c.ShouldBindJSON(&input); err != nil {
 		log.Printf("Register Error - Binding: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input format"})
 		return
 	}
 
-	
 	if err := validate.Struct(input); err != nil {
 		log.Printf("Register Error - Validation: %v", err)
-		
+
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Validation failed: " + err.Error()})
 		return
 	}
 
 	db := database.GetDB()
 
-	
 	var existingUser models.User
 	err := db.Where("email = ? OR username = ?", input.Email, input.Username).First(&existingUser).Error
 	if err == nil {
-		
+
 		errorMsg := "Conflict: "
-		if strings.EqualFold(existingUser.Email, input.Email) { 
+		if strings.EqualFold(existingUser.Email, input.Email) {
 			errorMsg += "Email already exists."
 		} else {
 			errorMsg += "Username already exists."
@@ -66,14 +72,12 @@ func Register(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": errorMsg})
 		return
 	} else if err != gorm.ErrRecordNotFound {
-		
+
 		log.Printf("Register Error - DB Check: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error checking user existence"})
 		return
 	}
-	
 
-	
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 	if err != nil {
 		log.Printf("Register Error - Hashing: %v", err)
@@ -81,30 +85,24 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	
+	// Generate Recovery Code
+	recoveryCode := strings.ToUpper(generateRandomCode(12))
+	recoveryHash, _ := bcrypt.GenerateFromPassword([]byte(recoveryCode), bcrypt.DefaultCost)
+
 	newUser := models.User{
-		Username:     input.Username,
-		Email:        input.Email,
-		PasswordHash: string(hashedPassword),
+		Username:         input.Username,
+		Email:            input.Email,
+		PasswordHash:     string(hashedPassword),
+		RecoveryCodeHash: string(recoveryHash), // Save hashed version
 	}
 
-	
-	result := db.Create(&newUser)
-	if result.Error != nil {
-		log.Printf("Register Error - DB Create: %v", result.Error)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register user"})
-		return
+	if err := db.Create(&newUser).Error; err != nil { /* error handle */
 	}
 
-	log.Printf("User registered successfully: %s (%s)", newUser.Username, newUser.Email)
-	
 	c.JSON(http.StatusCreated, gin.H{
-		"message": "User registered successfully",
-		"user": gin.H{
-			"id":       newUser.ID,
-			"username": newUser.Username,
-			"email":    newUser.Email,
-		},
+		"message":      "User registered successfully",
+		"recoveryCode": recoveryCode,
+		"user":         gin.H{"id": newUser.ID, "username": newUser.Username},
 	})
 }
 
@@ -123,14 +121,12 @@ func Register(c *gin.Context) {
 func Login(c *gin.Context) {
 	var input models.LoginInput
 
-	
 	if err := c.ShouldBindJSON(&input); err != nil {
 		log.Printf("Login Error - Binding: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input format"})
 		return
 	}
 
-	
 	if err := validate.Struct(input); err != nil {
 		log.Printf("Login Error - Validation: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Validation failed: " + err.Error()})
@@ -140,14 +136,11 @@ func Login(c *gin.Context) {
 	db := database.GetDB()
 	var user models.User
 
-	
-	
-	
-	result := db.Where("email = ?", input.Email).First(&user) 
+	result := db.Where("email = ?", input.Email).First(&user)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
 			log.Printf("Login Error - User not found: %s", input.Email)
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"}) 
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		} else {
 			log.Printf("Login Error - DB Find: %v", result.Error)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error finding user"})
@@ -155,16 +148,14 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	
 	err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(input.Password))
 	if err != nil {
-		
+
 		log.Printf("Login Error - Password mismatch for user: %s", input.Email)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"}) 
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
-	
 	token, err := utils.GenerateToken(user.ID)
 	if err != nil {
 		log.Printf("Login Error - Token Generation: %v", err)
@@ -173,14 +164,143 @@ func Login(c *gin.Context) {
 	}
 
 	log.Printf("User logged in successfully: %s (%d)", user.Username, user.ID)
-	
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Login successful",
 		"token":   token,
-		"user": gin.H{ 
+		"user": gin.H{
 			"id":       user.ID,
 			"username": user.Username,
 			"email":    user.Email,
 		},
+	})
+}
+
+// Add the Reset function
+func ResetPassword(c *gin.Context) {
+	var input models.ForgotPasswordInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+		return
+	}
+
+	db := database.GetDB()
+	var user models.User
+	if err := db.Where("email = ?", input.Email).First(&user).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	// Verify Recovery Code
+	err := bcrypt.CompareHashAndPassword([]byte(user.RecoveryCodeHash), []byte(strings.ToUpper(input.RecoveryCode)))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid recovery code"})
+		return
+	}
+
+	// Hash new password
+	newHash, _ := bcrypt.GenerateFromPassword([]byte(input.NewPassword), bcrypt.DefaultCost)
+	db.Model(&user).Update("password_hash", string(newHash))
+
+	c.JSON(http.StatusOK, gin.H{"message": "Password reset successful"})
+}
+
+func GetProfile(c *gin.Context) {
+	userIDAny, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User authentication not found"})
+		return
+	}
+
+	userID, ok := userIDAny.(uint)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error processing user identity"})
+		return
+	}
+
+	db := database.GetDB()
+
+	var user models.User
+	if err := db.First(&user, userID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error fetching user"})
+		}
+		return
+	}
+
+	type statsRow struct {
+		GamesPlayed int
+		TotalScore  int
+		HighScore   int
+	}
+
+	var stats statsRow
+	if err := db.Model(&models.Game{}).
+		Select(
+			"COUNT(*) as games_played, COALESCE(SUM(total_score), 0) as total_score, COALESCE(MAX(total_score), 0) as high_score",
+		).
+		Where("user_id = ?", userID).
+		Scan(&stats).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error fetching user stats"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":          user.ID,
+		"username":    user.Username,
+		"email":       user.Email,
+		"createdAt":   user.CreatedAt,
+		"gamesPlayed": stats.GamesPlayed,
+		"totalScore":  stats.TotalScore,
+		"highScore":   stats.HighScore,
+	})
+}
+
+func GetLeaderboard(c *gin.Context) {
+	db := database.GetDB()
+
+	limitStr := c.DefaultQuery("limit", "50")
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		limit = 50
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	type leaderboardRow struct {
+		ID          uint   `json:"id"`
+		Username    string `json:"username"`
+		GamesPlayed int    `json:"gamesPlayed"`
+		AvgScore    int    `json:"avgScore"`
+		BestScore   int    `json:"bestScore"`
+		TotalPoints int    `json:"totalPoints"`
+		JoinDate    string `json:"joinDate"`
+	}
+
+	var rows []leaderboardRow
+	if err := db.Table("users").
+		Select(`
+			users.id,
+			users.username,
+			COUNT(games.id) as games_played,
+			COALESCE(ROUND(AVG(games.total_score)), 0) as avg_score,
+			COALESCE(MAX(games.total_score), 0) as best_score,
+			COALESCE(SUM(games.total_score), 0) as total_points,
+			CAST(users.created_at AS TEXT) as join_date
+		`).
+		Joins("LEFT JOIN games ON games.user_id = users.id").
+		Group("users.id, users.username, users.created_at").
+		Order("total_points DESC, best_score DESC, games_played DESC, users.username ASC").
+		Limit(limit).
+		Scan(&rows).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch leaderboard"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"players": rows,
 	})
 }

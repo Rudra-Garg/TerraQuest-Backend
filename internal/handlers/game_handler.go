@@ -13,6 +13,27 @@ import (
 	"gorm.io/gorm"
 )
 
+type GameHistoryRoundResponse struct {
+	ID          uint    `json:"id"`
+	RoundNumber int     `json:"roundNumber"`
+	LocationID  uint    `json:"locationId"`
+	GuessLat    float64 `json:"guessLat"`
+	GuessLng    float64 `json:"guessLng"`
+	ActualLat   float64 `json:"actualLat"`
+	ActualLng   float64 `json:"actualLng"`
+	DistanceKm  float64 `json:"distanceKm"`
+	Score       int     `json:"score"`
+	CreatedAt   string  `json:"createdAt"`
+}
+
+type GameHistoryItemResponse struct {
+	ID           uint                       `json:"id"`
+	TotalScore   int                        `json:"totalScore"`
+	RoundsPlayed int                        `json:"roundsPlayed"`
+	CreatedAt    string                     `json:"createdAt"`
+	Rounds       []GameHistoryRoundResponse `json:"rounds"`
+}
+
 const defaultRounds = 5
 
 type GameLocationResponse struct {
@@ -177,5 +198,77 @@ func FinishGame(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "Game results saved successfully",
 		"gameId":  newGame.ID,
+	})
+}
+
+// GetGameHistory retrieves the authenticated user's completed solo games
+// @Summary      Get game history
+// @Description  Retrieves the authenticated user's completed solo game history including round details.
+// @Tags         Game
+// @Produce      json
+// @Success      200  {object}  map[string]interface{} "Game history retrieved successfully"
+// @Failure      401  {object}  map[string]string "Unauthorized"
+// @Failure      500  {object}  map[string]string "Internal server error"
+// @Security     BearerAuth
+// @Router       /game/history [get]
+func GetGameHistory(c *gin.Context) {
+	userIDAny, exists := c.Get("userID")
+	if !exists {
+		log.Println("GetGameHistory Error: userID not found in context")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User authentication not found"})
+		return
+	}
+
+	userID, ok := userIDAny.(uint)
+	if !ok {
+		log.Println("GetGameHistory Error: userID in context is not uint")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error processing user identity"})
+		return
+	}
+
+	db := database.GetDB()
+
+	var games []models.Game
+	if err := db.
+		Preload("Rounds", func(db *gorm.DB) *gorm.DB {
+			return db.Order("round_number ASC")
+		}).
+		Where("user_id = ?", userID).
+		Order("created_at DESC").
+		Find(&games).Error; err != nil {
+		log.Printf("GetGameHistory Error - DB Query: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch game history"})
+		return
+	}
+
+	responseGames := make([]GameHistoryItemResponse, 0, len(games))
+	for _, game := range games {
+		responseRounds := make([]GameHistoryRoundResponse, 0, len(game.Rounds))
+		for _, round := range game.Rounds {
+			responseRounds = append(responseRounds, GameHistoryRoundResponse{
+				ID:          round.ID,
+				RoundNumber: round.RoundNumber,
+				LocationID:  round.LocationID,
+				GuessLat:    round.GuessLat,
+				GuessLng:    round.GuessLng,
+				ActualLat:   round.ActualLat,
+				ActualLng:   round.ActualLng,
+				DistanceKm:  round.DistanceKm,
+				Score:       round.Score,
+				CreatedAt:   round.CreatedAt.Format(time.RFC3339),
+			})
+		}
+
+		responseGames = append(responseGames, GameHistoryItemResponse{
+			ID:           game.ID,
+			TotalScore:   game.TotalScore,
+			RoundsPlayed: game.RoundsPlayed,
+			CreatedAt:    game.CreatedAt.Format(time.RFC3339),
+			Rounds:       responseRounds,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"games": responseGames,
 	})
 }
